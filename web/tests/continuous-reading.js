@@ -4,6 +4,16 @@ async (page) => {
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
   const chapters = ["first", "second", "third"].map((id, i) => ({ id, title: `Chương ${i + 1}`, chapterNumber: i + 1 }));
   const requests = [];
+  await page.addInitScript(() => {
+    if (window.__ambientProbe?.gains) return;
+    window.__ambientProbe = { contexts: [], gains: [], sources: [] };
+    const Base = window.AudioContext;
+    window.AudioContext = class extends Base {
+      constructor(...args) { super(...args); window.__ambientProbe.contexts.push(this); }
+      createGain() { const gain = super.createGain(); window.__ambientProbe.gains.push(gain); return gain; }
+      createBufferSource() { const source = super.createBufferSource(); window.__ambientProbe.sources.push(source); return source; }
+    };
+  });
   let delayGeneration = false;
   let release;
   // ASCII-safe WAV fixture for the CLI sandbox (no Node Buffer available).
@@ -35,6 +45,21 @@ async (page) => {
   await page.goto("http://localhost:3000/reader/continuous-test/first");
   await page.getByRole("button", { name: "▶ Đọc", exact: true }).waitFor();
   assert(requests.length === 0, "Opening a chapter must not generate audio");
+  assert(await page.locator(".player-settings").evaluate((el) => !el.open), "Settings start collapsed");
+  assert(await page.evaluate(() => window.__ambientProbe.contexts.length === 0), "Opening Reader must not create audio context");
+  await page.locator(".player-settings summary").click();
+  await page.getByRole("button", { name: "Bật âm nền", exact: true }).click();
+  await page.waitForFunction(() => window.__ambientProbe.gains.at(-1)?.gain.value > 0.095);
+  await page.locator("audio").dispatchEvent("playing");
+  await page.waitForFunction(() => window.__ambientProbe.gains.at(-1)?.gain.value < 0.035);
+  await page.locator("audio").dispatchEvent("waiting");
+  await page.waitForFunction(() => window.__ambientProbe.gains.at(-1)?.gain.value > 0.095);
+  await page.getByLabel("Loại âm nền").selectOption("rain");
+  await page.waitForFunction(() => window.__ambientProbe.sources.length === 2);
+  assert(await page.evaluate(() => window.__ambientProbe.contexts.length === 1), "Changing ambience must reuse one audio context");
+  await page.getByRole("button", { name: "Tối", exact: true }).click();
+  await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
+  await page.getByRole("button", { name: "Giấy", exact: true }).click();
   await page.getByLabel("Tốc độ phát lại", { exact: true }).selectOption("1.25");
   await page.getByLabel("Tốc độ", { exact: true }).fill("1.2");
   await page.getByLabel("Cao độ", { exact: true }).fill("3");
@@ -44,6 +69,7 @@ async (page) => {
   await page.locator("audio").dispatchEvent("ended");
   await page.waitForURL("**/second");
   await page.waitForFunction(() => { const a = document.querySelector("audio"); return a && !a.paused && a.readyState >= 2; });
+  assert(await page.evaluate(() => window.__ambientProbe.contexts.length === 1 && window.__ambientProbe.contexts[0].state === "running"), "Ambience must survive chapter changes");
   assert(requests[1].voiceId === requests[0].voiceId, "Voice must survive chapter navigation");
   assert(requests[1].speakingRate === 1.2 && requests[1].pitch === 3, "Synthesis settings must survive navigation");
   assert(await page.locator("audio").evaluate((a) => a.volume === 0.4), "Volume must survive navigation");
@@ -52,8 +78,10 @@ async (page) => {
   await page.locator("audio").dispatchEvent("ended");
   assert(page.url().endsWith("/second"), "Stop must prevent chapter advancement");
   assert(await page.locator("audio").evaluate((a) => a.paused), "Stop must pause audio");
+  const beforeReplay = requests.length;
   await page.getByRole("button", { name: "▶ Đọc", exact: true }).click();
   await page.waitForFunction(() => !document.querySelector("audio").paused);
+  assert(requests.length === beforeReplay, "Replaying cached audio must not generate again");
   delayGeneration = true;
   await page.locator("audio").dispatchEvent("ended");
   await page.waitForURL("**/third");
@@ -74,6 +102,9 @@ async (page) => {
   await page.reload();
   await page.getByRole("button", { name: "▶ Đọc", exact: true }).waitFor();
   assert(await page.locator("audio").evaluate((a) => !a.getAttribute("src")), "Reload must not autoplay");
+  await page.locator(".player-settings summary").click();
+  assert(await page.evaluate(() => window.__ambientProbe.contexts.length === 0), "Reload must keep ambience silent");
+  assert(await page.getByLabel("Loại âm nền").inputValue() === "rain", "Ambient preference must survive reload");
   await page.getByLabel("Nhà cung cấp giọng đọc").selectOption("vieneu");
   assert(await page.getByLabel("Tốc độ", { exact: true }).isDisabled(), "VieNeu ignores synthesis rate");
   assert(await page.getByLabel("Cao độ", { exact: true }).isDisabled(), "VieNeu ignores pitch");
@@ -82,5 +113,46 @@ async (page) => {
   const last = requests[requests.length - 1];
   assert(last.voiceId === "vieneu-thien-tam-duc" && last.speakingRate === 1 && last.pitch === 0, "VieNeu must use fixed synthesis settings");
   await page.getByRole("button", { name: "■ Dừng", exact: true }).click();
-  return "PASS: continuous chapters, preserved voice/settings, stop, delayed request, final chapter, reload, typography";
+  await page.getByRole("button", { name: "Bật âm nền", exact: true }).click();
+  await page.getByRole("link", { name: "Gác Sách", exact: true }).click();
+  await page.waitForURL("**/library/continuous-test");
+  await page.waitForFunction(() => window.__ambientProbe.contexts.every((ctx) => ctx.state === "closed"));
+  // Two chunks: foreground navigation must reuse an in-flight prefetch.
+  const generated = [];
+  let finishPrefetch;
+  let delayOnce = true;
+  await page.route("**/api/tts/chunks/first", (route) => route.fulfill({ json: [
+    { chunkIndex: 0, text: "Đoạn đầu", startCharacter: 0, endCharacter: 8 },
+    { chunkIndex: 1, text: "Đoạn sau", startCharacter: 8, endCharacter: 16 },
+  ] }));
+  await page.route("**/api/tts/generate", async (route) => {
+    const payload = route.request().postDataJSON();
+    generated.push(payload);
+    if (payload.chunkIndex === 1 && delayOnce) {
+      delayOnce = false;
+      await new Promise((resolve) => { finishPrefetch = resolve; });
+    }
+    return route.fulfill({ json: { audioUrl: "/test.wav", cached: true } });
+  });
+  await page.goto("http://localhost:3000/reader/continuous-test/first");
+  await page.reload();
+  await page.getByRole("button", { name: "▶ Đọc", exact: true }).waitFor();
+  const prefetch = page.waitForRequest((r) => r.url().endsWith("/tts/generate") && r.postDataJSON().chunkIndex === 1);
+  await page.getByRole("button", { name: "▶ Đọc", exact: true }).click();
+  await prefetch;
+  await page.getByRole("button", { name: "Đoạn sau", exact: true }).click();
+  await page.getByRole("button", { name: "Đang tạo…", exact: true }).waitFor();
+  assert(generated.filter((r) => r.chunkIndex === 1).length === 1, "Pending prefetch must be deduplicated");
+  finishPrefetch();
+  await page.waitForFunction(() => !document.querySelector("audio").paused);
+  await page.getByRole("button", { name: "Đoạn trước", exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector("audio").paused);
+  assert(generated.filter((r) => r.chunkIndex === 0).length === 1, "Previous chunk must use query cache");
+  await page.locator(".player-settings summary").click();
+  await page.getByLabel("Nhà cung cấp giọng đọc").selectOption("vieneu");
+  await page.getByRole("button", { name: "▶ Đọc", exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector("audio").paused);
+  assert(generated.at(-1).voiceId === "vieneu-thien-tam-duc", "Changed voice must generate its own audio");
+  await page.getByRole("button", { name: "■ Dừng", exact: true }).click();
+  return "PASS: continuous reading, stop, settings, reload, typography, ambience lifecycle, cache, prefetch dedupe, voice changes";
 }

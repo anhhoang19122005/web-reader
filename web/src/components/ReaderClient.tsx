@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createBookmark, deleteBookmark, getBook, getBookmarks, getChapter, getProgress, saveProgress, TtsChunk } from "../lib/api";
 import { TtsPlayer } from "./TtsPlayer";
+import { useReadingPreferences } from "../lib/reading-preferences";
 import { useTtsSession } from "../lib/tts-session";
 
 function highlightedText(text: string, chunks: TtsChunk[], activeChunk: number | null): ReactNode[] {
@@ -17,7 +18,7 @@ function highlightedText(text: string, chunks: TtsChunk[], activeChunk: number |
     if (start > cursor) nodes.push(<span key={`text-${cursor}`}>{text.slice(cursor, start)}</span>);
     if (end > start) {
       const isActive = activeChunk === chunk.chunkIndex;
-      nodes.push(<mark className={isActive ? "rounded bg-amber-300/70 text-inherit scroll-mt-28" : "rounded bg-transparent text-inherit"} key={`chunk-${chunk.chunkIndex}`}>{text.slice(start, end)}</mark>);
+      nodes.push(<mark className={isActive ? "reading-highlight scroll-mt-28" : "rounded bg-transparent text-inherit"} key={`chunk-${chunk.chunkIndex}`}>{text.slice(start, end)}</mark>);
     }
     cursor = Math.max(cursor, end);
   });
@@ -30,8 +31,9 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
   const reading = useTtsSession((state) => state.running);
   const queryClient = useQueryClient();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const [theme, setTheme] = useState<"light" | "sepia" | "dark">("sepia");
-  const [textStyle, setTextStyle] = useState<"compact" | "comfortable" | "large">("comfortable");
+  const { theme, textStyle } = useReadingPreferences();
+  const setTheme = (theme: "light" | "sepia" | "dark") => useReadingPreferences.setState({ theme });
+  const setTextStyle = (textStyle: "compact" | "comfortable" | "large") => useReadingPreferences.setState({ textStyle });
   const [ttsChunk, setTtsChunk] = useState<TtsChunk | null>(null);
   const [followReading, setFollowReading] = useState(true);
   const textContainerRef = useRef<HTMLDivElement | null>(null);
@@ -116,12 +118,12 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
     };
   }, []);
 
-  if (bookQuery.isLoading || chapterQuery.isLoading) return <main className="grid min-h-screen place-items-center bg-[#f4efe7] text-stone-500"><div>Đang mở chương…{reading && <button className="ml-3 rounded-full border px-3 py-2" onClick={() => useTtsSession.setState({ running: false, autoplayChapterId: "" })}>■ Dừng</button>}</div></main>;
-  if (bookQuery.isError || chapterQuery.isError || !bookQuery.data || !chapterQuery.data) return <main className="grid min-h-screen place-items-center bg-[#f4efe7]"><Link className="text-stone-600 underline" href="/library">Không tìm thấy chapter. Về thư viện</Link></main>;
+  if (bookQuery.isLoading || chapterQuery.isLoading) return <main className="grid min-h-screen place-items-center reading-surface text-muted"><div>Đang mở chương…{reading && <button className="ml-3 rounded-full border px-3 py-2" onClick={() => useTtsSession.setState({ running: false, autoplayChapterId: "" })}>■ Dừng</button>}</div></main>;
+  if (bookQuery.isError || chapterQuery.isError || !bookQuery.data || !chapterQuery.data) return <main className="grid min-h-screen place-items-center reading-surface"><Link className="text-stone-600 underline" href="/library">Không tìm thấy chapter. Về thư viện</Link></main>;
   const chapterIndex = bookQuery.data.chapters.findIndex((chapter) => chapter.id === chapterId);
   const previousChapter = bookQuery.data.chapters[chapterIndex - 1];
   const nextChapter = bookQuery.data.chapters[chapterIndex + 1];
-  const themeStyle = { light: "bg-stone-50 text-stone-800", sepia: "bg-[#f4efe7] text-stone-800", dark: "bg-stone-950 text-stone-100" }[theme];
+  const themeStyle = "reading-surface";
   const textStyleClass = { compact: "text-lg leading-8", comfortable: "text-xl leading-9", large: "text-2xl leading-10" }[textStyle];
   const bookmarkPosition = ttsChunk?.startCharacter ?? progressQuery.data?.characterPosition ?? 0;
   function setFollow(value: boolean) {
@@ -137,15 +139,15 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
   }
 
   return <main className={`min-h-screen ${themeStyle}`}>
-    <header className={`sticky top-0 z-10 flex h-16 items-center justify-between border-b border-stone-200 px-5 backdrop-blur md:px-8 ${theme === "dark" ? "bg-stone-950/95" : "bg-[#fbf8f2]/95"}`}><Link className="font-serif text-xl font-semibold tracking-tight" href={`/library/${bookId}`}>Gác Sách</Link><span className="max-w-48 truncate text-sm opacity-60">{bookQuery.data.title}</span></header>
-    <article className={`mx-auto max-w-2xl px-5 py-12 font-serif md:px-8 ${textStyleClass}`}><p className="font-sans text-sm opacity-60">{bookQuery.data.author}</p><h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">{chapterQuery.data.title}</h1>
-      <div className="mt-8 flex flex-wrap gap-2 border-y border-current/10 py-3 font-sans text-xs"><span className="mr-1 self-center opacity-60">Giao diện</span>{(["light", "sepia", "dark"] as const).map((option) => <button className="rounded-full border border-current/20 px-3 py-1.5 hover:bg-current/10" aria-pressed={theme === option} key={option} onClick={() => setTheme(option)}>{option === "light" ? "Sáng" : option === "sepia" ? "Giấy" : "Tối"}</button>)}<span className="ml-2 self-center opacity-60">Cỡ chữ</span>{(["compact", "comfortable", "large"] as const).map((option) => <button className="rounded-full border border-current/20 px-3 py-1.5 hover:bg-current/10" aria-pressed={textStyle === option} key={option} onClick={() => setTextStyle(option)}>{option === "compact" ? "Nhỏ" : option === "comfortable" ? "Vừa" : "Lớn"}</button>)}</div>
-      <div ref={playerContainerRef} className={`sticky top-16 z-10 mt-5 max-h-[50dvh] overflow-y-auto rounded-xl py-2 shadow-sm ${themeStyle}`}><TtsPlayer key={chapterId} chapterId={chapterId} initialPosition={progressQuery.isLoading ? undefined : progressQuery.data?.chapterId === chapterId ? progressQuery.data.characterPosition : 0} onProgress={handleTtsProgress} onChunkChange={handleTtsChunk} onComplete={() => {
+    <header className="site-header sticky top-0 z-20"><Link className="wordmark" href={`/library/${bookId}`}>Gác Sách</Link><span className="max-w-48 truncate text-sm text-muted">{bookQuery.data.title}</span></header>
+    <article className={`mx-auto reader-column px-6 py-8 md:px-8 ${textStyleClass}`}><p className="font-sans text-sm text-muted">{bookQuery.data.author}</p><h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">{chapterQuery.data.title}</h1>
+
+      <div ref={playerContainerRef} className={`sticky top-16 z-10 mt-5 rounded-xl reader-dock ${themeStyle}`}><TtsPlayer readerSettings={<div className="reader-settings"><span className="mr-1 self-center text-muted">Giao diện</span>{(["light", "sepia", "dark"] as const).map((option) => <button className="rounded-full border border-current/20 px-3 py-1.5 hover:bg-current/10" aria-pressed={theme === option} key={option} onClick={() => setTheme(option)}>{option === "light" ? "Sáng" : option === "sepia" ? "Giấy" : "Tối"}</button>)}<span className="ml-2 self-center text-muted">Cỡ chữ</span>{(["compact", "comfortable", "large"] as const).map((option) => <button className="rounded-full border border-current/20 px-3 py-1.5 hover:bg-current/10" aria-pressed={textStyle === option} key={option} onClick={() => setTextStyle(option)}>{option === "compact" ? "Nhỏ" : option === "comfortable" ? "Vừa" : "Lớn"}</button>)}</div>} key={chapterId} chapterId={chapterId} initialPosition={progressQuery.isLoading ? undefined : progressQuery.data?.chapterId === chapterId ? progressQuery.data.characterPosition : 0} onProgress={handleTtsProgress} onChunkChange={handleTtsChunk} onComplete={() => {
         if (!useTtsSession.getState().running) return;
         if (nextChapter) selectChapter(nextChapter.id, true);
         else useTtsSession.setState({ running: false, autoplayChapterId: "" });
       }} /></div>
-      <div className="mt-4 flex flex-wrap items-center gap-3 font-sans text-sm"><button className="rounded-full border border-current/20 px-3 py-2 hover:bg-current/10 disabled:opacity-50" disabled={bookmarkMutation.isPending} onClick={() => bookmarkMutation.mutate(bookmarkPosition)}>🔖 Lưu dấu trang</button><button className="rounded-full border border-current/20 px-3 py-2 hover:bg-current/10" aria-pressed={followReading} title={followReading ? "Đang bám theo đoạn đọc" : "Đã tạm dừng bám theo"} onClick={() => setFollow(!followReading)}>{followReading ? "👁 Bám theo đoạn đọc" : "👁‍🗨 Đã dừng bám theo"}</button><span className="opacity-60">{bookmarksQuery.data?.length ?? 0} dấu trang</span></div>
+      <div className="mt-4 flex flex-wrap items-center gap-3 font-sans text-sm"><button className="rounded-full border border-current/20 px-3 py-2 hover:bg-current/10 disabled:opacity-50" disabled={bookmarkMutation.isPending} onClick={() => bookmarkMutation.mutate(bookmarkPosition)}>🔖 Lưu dấu trang</button><button className="rounded-full border border-current/20 px-3 py-2 hover:bg-current/10" aria-pressed={followReading} title={followReading ? "Đang bám theo đoạn đọc" : "Đã tạm dừng bám theo"} onClick={() => setFollow(!followReading)}>{followReading ? "👁 Bám theo đoạn đọc" : "👁‍🗨 Đã dừng bám theo"}</button><span className="text-muted">{bookmarksQuery.data?.length ?? 0} dấu trang</span></div>
       <div ref={textContainerRef} className="reader-text mt-8 whitespace-pre-line [&_mark]:transition-colors">{highlightedText(chapterQuery.data.plainText, ttsChunk ? [ttsChunk] : [], ttsChunk?.chunkIndex ?? null)}</div>
       {bookmarksQuery.data && bookmarksQuery.data.length > 0 && <ul className="mt-8 space-y-2 border-t border-current/10 pt-4 font-sans text-sm">{bookmarksQuery.data.slice(0, 8).map((bookmark) => <li className="flex items-center justify-between gap-2 opacity-80" key={bookmark.id}><span>Vị trí {bookmark.characterPosition}</span><button className="underline" onClick={() => removeBookmark.mutate(bookmark.id)}>Xóa</button></li>)}</ul>}
       <footer className="mt-14 flex justify-between border-t border-current/10 pt-5 font-sans text-sm"><button className="rounded-full px-3 py-2 opacity-70 hover:bg-current/10 disabled:invisible" disabled={!previousChapter} onClick={() => previousChapter && selectChapter(previousChapter.id)}>← Chương trước</button><button className="rounded-full px-3 py-2 opacity-70 hover:bg-current/10 disabled:invisible" disabled={!nextChapter} onClick={() => nextChapter && selectChapter(nextChapter.id)}>Chương sau →</button></footer>
