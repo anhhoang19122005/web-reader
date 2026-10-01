@@ -155,6 +155,7 @@ func (a *App) insertBook(ctx context.Context, bookID uuid.UUID, sourceKey, cover
 		FileType:               fileKind,
 		Language:               "vi",
 		CreatedAt:              time.Now().UTC(),
+		ChapterCount:           len(book.Chapters),
 	}
 	chapters := make([]any, 0, len(book.Chapters))
 	for index, chapter := range book.Chapters {
@@ -194,28 +195,42 @@ func (a *App) listBooks(w http.ResponseWriter, r *http.Request) *apiError {
 		if err := cursor.Decode(&document); err != nil {
 			return databaseError(err)
 		}
-		chapters, chapterErr := a.chaptersForBook(r.Context(), document)
-		if chapterErr != nil {
-			return databaseError(chapterErr)
+		if document.ChapterCount == 0 {
+			count, err := a.collection(chapterCollection).CountDocuments(r.Context(), bson.M{"bookId": document.ID})
+			if err != nil {
+				return databaseError(err)
+			}
+			document.ChapterCount = int(count)
+			if count == 0 {
+				document.ChapterCount = len(document.Chapters)
+			}
+			if _, err := a.collection(booksCollection).UpdateOne(r.Context(), bson.M{"_id": document.ID, "userId": singleUserID}, bson.M{"$set": bson.M{"chapterCount": document.ChapterCount}}); err != nil {
+				return databaseError(err)
+			}
 		}
 		id, err := mongoID(document.ID)
 		if err != nil {
 			return databaseError(err)
 		}
-		book := bookSummary{ID: id, Title: document.Title, Author: document.Author, FileType: document.FileType, HasCover: document.CoverStorageKey != "", ChapterCount: len(chapters), CreatedAt: document.CreatedAt}
+		book := bookSummary{ID: id, Title: document.Title, Author: document.Author, FileType: document.FileType, HasCover: document.CoverStorageKey != "", ChapterCount: document.ChapterCount, CreatedAt: document.CreatedAt}
 		var progress mongoProgress
 		progressErr := a.collection(progressCollection).FindOne(r.Context(), bson.M{"userId": singleUserID, "bookId": document.ID}).Decode(&progress)
 		if progressErr == nil {
 			book.LastReadAt = &progress.UpdatedAt
-			for _, chapter := range chapters {
-				if chapter.ID == progress.ChapterID {
-					position := float64(0)
-					if length := len([]rune(chapter.PlainText)); length > 0 {
-						position = min(1, float64(progress.CharacterPosition)/float64(length))
-					}
-					book.ProgressPercent = min(100, int((float64(chapter.ChapterNumber-1)+position)*100/float64(maxInt(1, len(chapters)))+0.5))
-					break
+			chapterID, err := mongoID(progress.ChapterID)
+			if err != nil {
+				return databaseError(err)
+			}
+			_, chapter, err := a.findChapter(r.Context(), id, chapterID)
+			if err != nil && !errorsIsNoRows(err) {
+				return databaseError(err)
+			}
+			if err == nil {
+				position := float64(0)
+				if length := len([]rune(chapter.PlainText)); length > 0 {
+					position = min(1, float64(progress.CharacterPosition)/float64(length))
 				}
+				book.ProgressPercent = min(100, int((float64(chapter.ChapterNumber-1)+position)*100/float64(maxInt(1, document.ChapterCount))+0.5))
 			}
 		} else if !errorsIsNoRows(progressErr) {
 			return databaseError(progressErr)
@@ -262,7 +277,7 @@ func (a *App) getBook(w http.ResponseWriter, r *http.Request, bookID uuid.UUID) 
 	if err != nil {
 		return databaseError(err)
 	}
-	chapters, chapterErr := a.chaptersForBook(r.Context(), document)
+	chapters, chapterErr := a.chapterSummariesForBook(r.Context(), document)
 	if chapterErr != nil {
 		return databaseError(chapterErr)
 	}
@@ -302,7 +317,7 @@ func (a *App) deleteBook(w http.ResponseWriter, r *http.Request, bookID uuid.UUI
 	if _, err := a.collection(booksCollection).DeleteOne(r.Context(), bson.M{"_id": bookID.String(), "userId": singleUserID}); err != nil {
 		return databaseError(err)
 	}
-	chapters, chapterErr := a.chaptersForBook(r.Context(), document)
+	chapters, chapterErr := a.chapterSummariesForBook(r.Context(), document)
 	if chapterErr != nil {
 		return databaseError(chapterErr)
 	}

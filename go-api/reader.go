@@ -1,12 +1,14 @@
 package readerapi
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
@@ -66,17 +68,68 @@ func (a *App) saveProgress(w http.ResponseWriter, r *http.Request, requestPath s
 	if decodeErr := decodeJSON(r, &request); decodeErr != nil || request.ChapterID == uuid.Nil || request.CharacterPosition < 0 {
 		return newAPIError(http.StatusBadRequest, "VALIDATION_ERROR", "Dữ liệu không hợp lệ.")
 	}
-	if chapterErr := a.ensureChapter(r.Context(), bookID, request.ChapterID); chapterErr != nil {
-		return chapterErr
+	_, chapter, err := a.findChapter(r.Context(), bookID, request.ChapterID)
+	if errorsIsNoRows(err) {
+		return newAPIError(http.StatusNotFound, "CHAPTER_NOT_FOUND", "Không tìm thấy chapter.")
 	}
-	updatedAt := time.Now().UTC()
-	document := mongoProgress{ID: singleUserID + ":" + bookID.String(), UserID: singleUserID, BookID: bookID.String(), ChapterID: request.ChapterID.String(), CharacterPosition: request.CharacterPosition, UpdatedAt: updatedAt}
-	_, err = a.collection(progressCollection).ReplaceOne(r.Context(), bson.M{"userId": singleUserID, "bookId": bookID.String()}, document, options.Replace().SetUpsert(true))
 	if err != nil {
 		return databaseError(err)
 	}
-	writeJSON(w, http.StatusOK, readingProgress{BookID: bookID, ChapterID: &request.ChapterID, CharacterPosition: request.CharacterPosition, UpdatedAt: &updatedAt})
+	document, err := a.advanceProgress(r.Context(), bookID, chapter, request.CharacterPosition)
+	if err != nil {
+		return databaseError(err)
+	}
+	chapterID, err := uuid.Parse(document.ChapterID)
+	if err != nil {
+		return databaseError(err)
+	}
+	writeJSON(w, http.StatusOK, readingProgress{BookID: bookID, ChapterID: &chapterID, CharacterPosition: document.CharacterPosition, UpdatedAt: &document.UpdatedAt})
 	return nil
+}
+
+func (a *App) advanceProgress(ctx context.Context, bookID uuid.UUID, chapter mongoChapter, position int) (mongoProgress, error) {
+	filter := bson.M{"userId": singleUserID, "bookId": bookID.String()}
+	for {
+		var saved mongoProgress
+		err := a.collection(progressCollection).FindOne(ctx, filter).Decode(&saved)
+		next := mongoProgress{ID: singleUserID + ":" + bookID.String(), UserID: singleUserID, BookID: bookID.String(), ChapterID: chapter.ID, CharacterPosition: position, UpdatedAt: time.Now().UTC().Truncate(time.Millisecond)}
+		if errorsIsNoRows(err) {
+			_, err = a.collection(progressCollection).InsertOne(ctx, next)
+			if mongo.IsDuplicateKeyError(err) {
+				continue
+			}
+			return next, err
+		}
+		if err != nil {
+			return mongoProgress{}, err
+		}
+		next.ID = saved.ID
+		savedNumber := chapter.ChapterNumber
+		if saved.ChapterID != chapter.ID {
+			id, err := uuid.Parse(saved.ChapterID)
+			if err != nil {
+				return mongoProgress{}, err
+			}
+			_, previous, err := a.findChapter(ctx, bookID, id)
+			if err != nil {
+				return mongoProgress{}, err
+			}
+			savedNumber = previous.ChapterNumber
+		}
+		if chapter.ChapterNumber < savedNumber || (chapter.ChapterNumber == savedNumber && position <= saved.CharacterPosition) {
+			return saved, nil
+		}
+		// Only replace the position we compared; retry if another request advanced it.
+		result, err := a.collection(progressCollection).ReplaceOne(ctx, bson.M{
+			"userId": singleUserID, "bookId": bookID.String(), "chapterId": saved.ChapterID, "characterPosition": saved.CharacterPosition,
+		}, next)
+		if err != nil {
+			return mongoProgress{}, err
+		}
+		if result.MatchedCount != 0 {
+			return next, nil
+		}
+	}
 }
 
 func (a *App) bookmarkRoute(w http.ResponseWriter, r *http.Request, requestPath string) *apiError {

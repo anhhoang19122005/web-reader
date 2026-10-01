@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { apiUrl, generateTts, getTtsChunks, getTtsVoices, type TtsChunk, type TtsGenerateResponse } from "../lib/api";
 import { useTtsSession } from "../lib/tts-session";
+import { audioPosition, resumePoint } from "../lib/tts-progress";
 
 const providerLabels: Record<string, string> = { edge: "Edge-TTS", saydi: "SaydiVoice", mock: "Demo", local: "Local · Offline" };
 const ttsAudioCacheTime = 24 * 60 * 60 * 1000;
@@ -15,9 +16,12 @@ function ttsAudioKey(payload: TtsPayload, chunkText: string, provider: string) {
   return ["tts-audio", payload.chapterId, payload.chunkIndex, chunkText, provider, payload.voiceId, payload.speakingRate, payload.pitch, payload.volume] as const;
 }
 
-export function TtsPlayer({ chapterId, onChunkChange, onComplete }: { chapterId: string; onChunkChange: (chunk: TtsChunk | null, info?: { auto: boolean }) => void; onComplete?: () => void }) {
+export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChange, onComplete }: { chapterId: string; initialPosition: number | undefined; onProgress: (position: number) => void; onChunkChange: (chunk: TtsChunk | null, info?: { auto: boolean }) => void; onComplete?: () => void }) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [chunkIndex, setChunkIndex] = useState(0);
+  const [chunkIndex, setChunkIndex] = useState(-1);
+  const pendingSeek = useRef<number | null>(null);
+  const durationSeconds = useRef(0);
+  const loadedAudioKey = useRef("");
   const { voiceId, speakingRate, pitch, volume, playbackRate, preset, provider, running, autoplayChapterId } = useTtsSession();
   const setVoiceId = (voiceId: string) => useTtsSession.setState({ voiceId });
   const setSpeakingRate = (speakingRate: number) => useTtsSession.setState({ speakingRate });
@@ -37,6 +41,50 @@ export function TtsPlayer({ chapterId, onChunkChange, onComplete }: { chapterId:
   const queryClient = useQueryClient();
   const voices = useQuery({ queryKey: ["tts-voices"], queryFn: getTtsVoices, staleTime: 300_000 });
   const chunks = useQuery({ queryKey: ["tts-chunks", chapterId], queryFn: () => getTtsChunks(chapterId) });
+  const resume = resumePoint(chunks.data ?? [], initialPosition ?? 0);
+  const displayedIndex = chunkIndex < 0 ? resume.index : chunkIndex;
+  const audioReady = !voices.isLoading && !chunks.isLoading && initialPosition !== undefined;
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audioReady || !audio || !chunks.data) return;
+    let lastSaved = 0;
+    const report = (force = false) => {
+      const chunk = chunks.data[activeIndex.current];
+      if (!chunk || pendingSeek.current !== null || (!force && Date.now() - lastSaved < 5000)) return;
+      const position = audioPosition(chunk, audio.currentTime, Number.isFinite(audio.duration) ? audio.duration : durationSeconds.current);
+      if (position === null) return;
+      lastSaved = Date.now();
+      onProgress(position);
+    };
+    const tick = () => report();
+    const flush = () => report(true);
+    const hide = () => { if (document.visibilityState === "hidden") flush(); };
+    audio.addEventListener("timeupdate", tick);
+    audio.addEventListener("pause", flush);
+    audio.addEventListener("ended", flush);
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", hide);
+    return () => {
+      flush();
+      audio.pause();
+      audio.removeEventListener("timeupdate", tick);
+      audio.removeEventListener("pause", flush);
+      audio.removeEventListener("ended", flush);
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", hide);
+    };
+  }, [chunks.data, audioReady, onProgress]);
+
+  function restoreAudioPosition() {
+    const audio = audioRef.current;
+    if (!audio || pendingSeek.current === null) return;
+    const duration = Number.isFinite(audio.duration) ? audio.duration : durationSeconds.current;
+    if (duration > 0) {
+      audio.currentTime = duration * pendingSeek.current;
+      pendingSeek.current = null;
+    }
+  }
   const allVoices = voices.data ?? [];
   const providers = Array.from(new Set(allVoices.map((voice) => voice.provider)));
   const visibleVoices = provider === "all" ? allVoices : allVoices.filter((voice) => voice.provider === provider);
@@ -70,7 +118,7 @@ export function TtsPlayer({ chapterId, onChunkChange, onComplete }: { chapterId:
       useTtsSession.setState({ running: false, autoplayChapterId: "" });
       return;
     }
-    if (!selectedVoice || !chunks.data?.length) return;
+    if (!selectedVoice || !chunks.data?.length || initialPosition === undefined) return;
     const timer = setTimeout(() => {
       if (useTtsSession.getState().autoplayChapterId !== chapterId) return;
       useTtsSession.setState({ autoplayChapterId: "" });
@@ -79,7 +127,7 @@ export function TtsPlayer({ chapterId, onChunkChange, onComplete }: { chapterId:
     return () => clearTimeout(timer);
     // Playback starts once, after both queries resolve; settings come from the session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chapterId, autoplayChapterId, running, selectedVoice, chunks.data, voices.isError, chunks.isError]);
+  }, [chapterId, autoplayChapterId, running, selectedVoice, chunks.data, voices.isError, chunks.isError, initialPosition]);
 
   function stop() {
     invalidateSetting();
@@ -168,6 +216,10 @@ export function TtsPlayer({ chapterId, onChunkChange, onComplete }: { chapterId:
     const request = chunkRequest(index);
     if (!request) return;
     useTtsSession.setState({ running: true, voiceId: selectedVoice });
+    if (loadedAudioKey.current === request.audioKey && audioRef.current?.src) {
+      try { await audioRef.current.play(); } catch (exception) { setError(exception instanceof Error ? exception.message : "Không thể phát audio."); }
+      return;
+    }
     const version = ++playVersion.current;
     const settings = settingsVersion.current;
     setError("");
@@ -182,7 +234,10 @@ export function TtsPlayer({ chapterId, onChunkChange, onComplete }: { chapterId:
         pendingAudio.current.get(request.audioKey)?.controller.abort();
         pendingAudio.current.delete(request.audioKey);
       }
+      pendingSeek.current = activeIndex.current < 0 && !auto && index === resume.index ? resume.fraction : 0;
+      durationSeconds.current = response.durationMs / 1000;
       activeIndex.current = index;
+      loadedAudioKey.current = request.audioKey;
       activeAudioKey.current = buffered ? request.audioKey : "";
       trimAudioBuffer(index, request.settings);
       setChunkIndex(index);
@@ -203,13 +258,13 @@ export function TtsPlayer({ chapterId, onChunkChange, onComplete }: { chapterId:
 
   function playNext(auto = false) {
     if (auto && !useTtsSession.getState().running) return;
-    const next = activeIndex.current + 1;
+    const next = (activeIndex.current < 0 ? resume.index : activeIndex.current) + 1;
     if (chunks.data?.[next]) void play(next, true);
     else { onChunkChange(null, { auto: true }); onComplete?.(); }
   }
 
   function playPrevious() {
-    void play(Math.max(0, activeIndex.current - 1));
+    void play(Math.max(0, (activeIndex.current < 0 ? resume.index : activeIndex.current) - 1));
   }
 
   function applyPreset(value: string) {
@@ -221,12 +276,12 @@ export function TtsPlayer({ chapterId, onChunkChange, onComplete }: { chapterId:
     setPitch(nextPitch);
   }
 
-  if (voices.isLoading || chunks.isLoading) return <div className="rounded-xl border border-current/10 p-4 font-sans text-sm opacity-70">Đang tải giọng đọc…</div>;
+  if (voices.isLoading || chunks.isLoading || initialPosition === undefined) return <div className="rounded-xl border border-current/10 p-4 font-sans text-sm opacity-70">Đang tải giọng đọc…</div>;
   if (voices.isError || chunks.isError || !voices.data?.length || !chunks.data?.length) return <div className="rounded-xl border border-current/10 p-4 font-sans text-sm opacity-70">Chưa có giọng đọc khả dụng.</div>;
 
   return <div className="rounded-xl border border-current/10 p-4 font-sans text-sm">
     <div className="flex flex-wrap items-center gap-2">
-      <button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={chunkIndex === 0} onClick={playPrevious}>←</button><button className="rounded-full bg-stone-800 px-4 py-2 text-white disabled:opacity-50" disabled={isGenerating} onClick={() => void play(chunkIndex)}>{isGenerating ? "Đang tạo…" : "▶ Đọc"}</button><button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={chunkIndex >= chunks.data.length - 1} onClick={() => playNext()}>→</button>
+      <button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={displayedIndex === 0} onClick={playPrevious}>←</button><button className="rounded-full bg-stone-800 px-4 py-2 text-white disabled:opacity-50" disabled={isGenerating} onClick={() => void play(displayedIndex)}>{isGenerating ? "Đang tạo…" : "▶ Đọc"}</button><button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={displayedIndex >= chunks.data.length - 1} onClick={() => playNext()}>→</button>
       <button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={!running} onClick={stop}>■ Dừng</button>
       <select className="rounded-lg border border-current/20 bg-transparent px-2 py-2" aria-label="Nhà cung cấp giọng đọc" value={provider} onChange={(event) => { invalidateSetting(); setProvider(event.target.value); setVoiceId(""); }}><option value="all">Tất cả nhà cung cấp</option>{providers.map((value) => <option key={value} value={value}>{providerLabels[value] ?? value} ({allVoices.filter((voice) => voice.provider === value).length})</option>)}</select>
       <select className="rounded-lg border border-current/20 bg-transparent px-2 py-2" aria-label="Giọng đọc" value={selectedVoice} onChange={(event) => { invalidateSetting(); setVoiceId(event.target.value); }}>{providers.map((value) => { const grouped = visibleVoices.filter((voice) => voice.provider === value); return grouped.length ? <optgroup key={value} label={providerLabels[value] ?? value}>{grouped.map((voice) => <option key={voice.id} value={voice.id}>{voice.name}</option>)}</optgroup> : null; })}</select>
@@ -238,7 +293,7 @@ export function TtsPlayer({ chapterId, onChunkChange, onComplete }: { chapterId:
     </div>
     {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
     {voices.data.length === 1 && voices.data[0].provider === "mock" && <p className="mt-3 text-xs opacity-60">Đang dùng voice demo. Chạy lại start-reader.ps1 để cài Edge-TTS miễn phí.</p>}
-    <audio ref={audioRef} className="mt-3 w-full" controls onPlay={(event) => { if (!event.currentTarget.paused) useTtsSession.setState({ running: true }); }} onPlaying={() => void prefetchNext(activeIndex.current).catch(() => undefined)} onEnded={() => playNext(true)} onVolumeChange={(event) => setVolume(event.currentTarget.volume)} />
-    <p className="mt-2 opacity-60">Đoạn {chunkIndex + 1}/{chunks.data.length} · Tự đọc chương kế tiếp đến khi bấm Dừng.</p>
+    <audio ref={audioRef} className="mt-3 w-full" controls onLoadedMetadata={restoreAudioPosition} onCanPlay={restoreAudioPosition} onPlay={(event) => { if (!event.currentTarget.paused) useTtsSession.setState({ running: true }); }} onPlaying={() => void prefetchNext(activeIndex.current).catch(() => undefined)} onEnded={() => playNext(true)} onVolumeChange={(event) => setVolume(event.currentTarget.volume)} />
+    <p className="mt-2 opacity-60">Đoạn {displayedIndex + 1}/{chunks.data.length} · Tự đọc chương kế tiếp đến khi bấm Dừng.</p>
   </div>;
 }

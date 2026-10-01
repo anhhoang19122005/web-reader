@@ -204,7 +204,9 @@ func (a *App) availableVoices(ctx context.Context) []ttsVoice {
 	}
 	a.saydiVoicesMu.Unlock()
 
-	voices, err := a.fetchSaydiVoices(ctx)
+	listCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	voices, err := a.fetchSaydiVoices(listCtx)
 	a.saydiVoicesMu.Lock()
 	if err == nil && len(voices) > 0 {
 		configured := a.configuredSaydiVoice()
@@ -220,6 +222,13 @@ func (a *App) availableVoices(ctx context.Context) []ttsVoice {
 		}
 		a.saydiVoices = voices
 		a.saydiVoicesAt = time.Now()
+	}
+	if err != nil || len(voices) == 0 {
+		if len(a.saydiVoices) == 0 {
+			a.saydiVoices = []ttsVoice{a.configuredSaydiVoice()}
+		}
+		// Cache provider failures briefly so every chapter does not wait on Saydi.
+		a.saydiVoicesAt = time.Now().Add(30*time.Second - saydiVoiceCacheTTL)
 	}
 	cached := append([]ttsVoice(nil), a.saydiVoices...)
 	a.saydiVoicesMu.Unlock()
@@ -386,9 +395,7 @@ func (a *App) ttsAudio(w http.ResponseWriter, r *http.Request, requestPath strin
 		return newAPIError(http.StatusNotFound, "STORAGE_NOT_FOUND", "Không tìm thấy tệp âm thanh.")
 	}
 	w.Header().Set("Content-Type", audio.MimeType)
-	w.Header().Set("Content-Length", strconv.Itoa(len(content)))
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(content)
+	http.ServeContent(w, r, audio.AudioStorageKey, audio.CreatedAt, bytes.NewReader(content))
 	return nil
 }
 

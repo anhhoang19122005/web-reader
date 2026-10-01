@@ -65,6 +65,7 @@ export const getProgress = (bookId: string) => request<ReadingProgress>(`/reader
 
 export const saveProgress = (bookId: string, chapterId: string, characterPosition: number) => request<ReadingProgress>(`/reader/progress/${bookId}`, {
   method: "PUT",
+  keepalive: true,
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ chapterId, characterPosition }),
 });

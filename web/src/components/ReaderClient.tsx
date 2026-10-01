@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createBookmark, deleteBookmark, getBook, getBookmarks, getChapter, getProgress, saveProgress, TtsChunk } from "../lib/api";
 import { TtsPlayer } from "./TtsPlayer";
 import { useTtsSession } from "../lib/tts-session";
@@ -42,6 +42,9 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
   const progressQuery = useQuery({ queryKey: ["progress", bookId], queryFn: () => getProgress(bookId) });
   const bookmarksQuery = useQuery({ queryKey: ["bookmarks", bookId], queryFn: () => getBookmarks(bookId) });
   const { mutate: persistProgress } = useMutation({ mutationFn: ({ nextChapterId, characterPosition }: { nextChapterId: string; characterPosition: number }) => saveProgress(bookId, nextChapterId, characterPosition) });
+  const handleTtsProgress = useCallback((characterPosition: number) => {
+    persistProgress({ nextChapterId: chapterId, characterPosition });
+  }, [chapterId, persistProgress]);
   const bookmarkMutation = useMutation({ mutationFn: (position: number) => createBookmark(bookId, { chapterId, characterPosition: position }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["bookmarks", bookId] }) });
   const removeBookmark = useMutation({ mutationFn: (bookmarkId: string) => deleteBookmark(bookId, bookmarkId), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["bookmarks", bookId] }) });
   const chapterText = chapterQuery.data?.plainText;
@@ -62,8 +65,10 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
   useEffect(() => {
     if (!chapterText) return;
     const handleScroll = () => {
+      if (useTtsSession.getState().running) return;
       clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
+        if (useTtsSession.getState().running) return;
         const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
         const ratio = maxScroll > 0 ? window.scrollY / maxScroll : 0;
         persistProgress({ nextChapterId: chapterId, characterPosition: Math.round(ratio * chapterText.length) });
@@ -133,7 +138,7 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
     <header className={`sticky top-0 z-10 flex h-16 items-center justify-between border-b border-stone-200 px-5 backdrop-blur md:px-8 ${theme === "dark" ? "bg-stone-950/95" : "bg-[#fbf8f2]/95"}`}><Link className="font-serif text-xl font-semibold tracking-tight" href={`/library/${bookId}`}>Gác Sách</Link><span className="max-w-48 truncate text-sm opacity-60">{bookQuery.data.title}</span></header>
     <article className={`mx-auto max-w-2xl px-5 py-12 font-serif md:px-8 ${textStyleClass}`}><p className="font-sans text-sm opacity-60">{bookQuery.data.author}</p><h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">{chapterQuery.data.title}</h1>
       <div className="mt-8 flex flex-wrap gap-2 border-y border-current/10 py-3 font-sans text-xs"><span className="mr-1 self-center opacity-60">Giao diện</span>{(["light", "sepia", "dark"] as const).map((option) => <button className="rounded-full border border-current/20 px-3 py-1.5 hover:bg-current/10" aria-pressed={theme === option} key={option} onClick={() => setTheme(option)}>{option === "light" ? "Sáng" : option === "sepia" ? "Giấy" : "Tối"}</button>)}<span className="ml-2 self-center opacity-60">Cỡ chữ</span>{(["compact", "comfortable", "large"] as const).map((option) => <button className="rounded-full border border-current/20 px-3 py-1.5 hover:bg-current/10" aria-pressed={textStyle === option} key={option} onClick={() => setTextStyle(option)}>{option === "compact" ? "Nhỏ" : option === "comfortable" ? "Vừa" : "Lớn"}</button>)}</div>
-      <div className="mt-5"><TtsPlayer key={chapterId} chapterId={chapterId} onChunkChange={handleTtsChunk} onComplete={() => {
+      <div className="mt-5"><TtsPlayer key={chapterId} chapterId={chapterId} initialPosition={progressQuery.isLoading ? undefined : progressQuery.data?.chapterId === chapterId ? progressQuery.data.characterPosition : 0} onProgress={handleTtsProgress} onChunkChange={handleTtsChunk} onComplete={() => {
         if (!useTtsSession.getState().running) return;
         if (nextChapter) selectChapter(nextChapter.id, true);
         else useTtsSession.setState({ running: false, autoplayChapterId: "" });

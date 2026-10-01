@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 const (
@@ -29,17 +28,19 @@ type mongoBook struct {
 	FileType               string         `bson:"fileType"`
 	Language               string         `bson:"language"`
 	CreatedAt              time.Time      `bson:"createdAt"`
+	ChapterCount           int            `bson:"chapterCount"`
 	Chapters               []mongoChapter `bson:"chapters,omitempty"` // legacy documents only
 }
 
 type mongoChapter struct {
-	ID            string `bson:"id"`
-	BookID        string `bson:"bookId"`
-	ChapterNumber int    `bson:"chapterNumber"`
-	Title         string `bson:"title"`
-	ContentHTML   string `bson:"contentHtml"`
-	PlainText     string `bson:"plainText"`
-	ContentHash   string `bson:"contentHash"`
+	ID              string `bson:"id"`
+	BookID          string `bson:"bookId"`
+	ChapterNumber   int    `bson:"chapterNumber"`
+	Title           string `bson:"title"`
+	ContentHTML     string `bson:"contentHtml"`
+	PlainText       string `bson:"plainText"`
+	ContentHash     string `bson:"contentHash"`
+	PlainTextLength int    `bson:"plainTextLength,omitempty"`
 }
 
 type mongoProgress struct {
@@ -139,8 +140,13 @@ func (a *App) ownedChapterDocument(ctx context.Context, chapterID uuid.UUID) (mo
 	return mongoBook{}, mongoChapter{}, mongo.ErrNoDocuments
 }
 
-func (a *App) chaptersForBook(ctx context.Context, book mongoBook) ([]mongoChapter, error) {
-	cursor, err := a.collection(chapterCollection).Find(ctx, bson.M{"bookId": book.ID}, options.Find().SetSort(bson.D{{Key: "chapterNumber", Value: 1}}))
+func (a *App) chapterSummariesForBook(ctx context.Context, book mongoBook) ([]mongoChapter, error) {
+	cursor, err := a.collection(chapterCollection).Aggregate(ctx, bson.A{
+		bson.M{"$match": bson.M{"bookId": book.ID}},
+		bson.M{"$sort": bson.M{"chapterNumber": 1}},
+		bson.M{"$project": bson.M{"_id": 0, "id": 1, "bookId": 1, "chapterNumber": 1, "title": 1,
+			"plainTextLength": bson.M{"$strLenCP": bson.M{"$ifNull": bson.A{"$plainText", ""}}}}},
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +163,11 @@ func (a *App) chaptersForBook(ctx context.Context, book mongoBook) ([]mongoChapt
 		return nil, err
 	}
 	if len(chapters) == 0 {
-		return book.Chapters, nil
+		for _, chapter := range book.Chapters {
+			chapter.PlainTextLength = len([]rune(chapter.PlainText))
+			chapter.PlainText, chapter.ContentHTML, chapter.ContentHash = "", "", ""
+			chapters = append(chapters, chapter)
+		}
 	}
 	return chapters, nil
 }
