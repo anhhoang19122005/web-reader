@@ -2,6 +2,30 @@
 
 ## Bản Go dùng cho Vercel
 
+### Bản cá nhân: web Vercel, API/Piper trên máy Windows
+
+Web hiện ở `https://web-reader-six.vercel.app`. Trong PowerShell 7.4 trở lên,
+chạy tại thư mục Reader sau khi máy khởi động lại:
+
+```powershell
+pwsh -File .\start-reader-home.ps1 -Publish
+```
+
+Script giữ nguyên thư viện/tiến độ Atlas và storage theo `.env`, chạy API riêng
+ở port 8083, mở Cloudflare Quick Tunnel và cập nhật production env trên Vercel.
+Máy phải bật và có Internet khi đọc. Quick Tunnel có URL tạm thời, đổi khi
+khởi động lại; `-Publish` cập nhật địa chỉ mới và redeploy web. Để dùng hostname
+ổn định lâu dài cần cấu hình named tunnel với domain riêng.
+
+Tài khoản `reader` và mật khẩu tự tạo nằm trong `.reader-deploy/login.txt`.
+Không commit hoặc chia sẻ `.reader-deploy/credentials.json`: nó chứa khóa API.
+Khóa chỉ đặt phía server của Vercel, không có trong JavaScript frontend.
+Đăng nhập Vercel CLI bằng `vercel login` nếu script yêu cầu. Lần đầu cần link
+project: `cd web; vercel link --yes --project web-reader`.
+
+Không cấu hình `READER_ACCESS_TOKEN` thì API local vẫn giữ hành vi cũ; chỉ
+API dành cho tunnel mới bật bảo vệ token. Mật khẩu web dùng HTTP Basic qua HTTPS.
+
 ```powershell
 .\start-reader-go.ps1
 ```

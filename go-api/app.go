@@ -2,6 +2,7 @@ package readerapi
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +22,7 @@ import (
 const singleUserID = "00000000-0000-0000-0000-000000000001"
 
 type Config struct {
+	AccessToken     string
 	MongoURI        string
 	MongoDatabase   string
 	StorageProvider string
@@ -80,6 +82,7 @@ func LoadConfig() Config {
 		saydiKeys = parseSaydiKeys(os.Getenv("SAYDI_API_KEY"))
 	}
 	return Config{
+		AccessToken:     os.Getenv("READER_ACCESS_TOKEN"),
 		MongoURI:        env("MONGODB_URI", "mongodb://localhost:27017"),
 		MongoDatabase:   env("MONGODB_DATABASE", "novel_reader"),
 		StorageProvider: env("STORAGE_PROVIDER", "local"),
@@ -125,6 +128,10 @@ func NewApp(ctx context.Context) (*App, error) {
 func (a *App) Close() error { return a.client.Disconnect(context.Background()) }
 
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if a.config.AccessToken != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Reader-Token")), []byte(a.config.AccessToken)) != 1 {
+		writeJSON(w, http.StatusUnauthorized, newAPIError(http.StatusUnauthorized, "UNAUTHORIZED", "Không có quyền truy cập API."))
+		return
+	}
 	if !a.allowCORS(w, r) {
 		return
 	}

@@ -3,6 +3,7 @@
 !.env.example
 .vercel/
 .playwright-cli/
+.reader-deploy/
 /*.onnx
 /*.onnx.json
 /input.txt
