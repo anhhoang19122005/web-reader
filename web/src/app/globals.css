@@ -12,3 +12,10 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.reader-text {
+  font-family: Arial, Helvetica, sans-serif;
+  letter-spacing: normal;
+  word-spacing: normal;
+  font-kerning: normal;
+}

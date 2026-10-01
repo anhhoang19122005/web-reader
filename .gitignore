@@ -1,2 +1,18 @@
 .env
+.env.*
+!.env.example
+.vercel/
+.playwright-cli/
+/*.onnx
+/*.onnx.json
+/input.txt
+/output.wav
 data/
+# Piper local (binary + model ~150MB do script tự tải, không commit)
+tools/piper/piper.exe
+tools/piper/*.dll
+tools/piper/espeak-ng-data/
+tools/piper/voices/*
+!tools/piper/.gitkeep
+!tools/piper/voices/.gitkeep
+

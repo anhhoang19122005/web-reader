@@ -69,7 +69,24 @@ export const saveProgress = (bookId: string, chapterId: string, characterPositio
   body: JSON.stringify({ chapterId, characterPosition }),
 });
 
-export const uploadBook = (file: File) => {
+export const uploadBook = async (file: File) => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (supabaseUrl && supabaseAnonKey) {
+    const signedUpload = await request<{ path: string; token: string; bucket: string }>("/uploads/sign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: file.name }),
+    });
+    const storage = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { error } = await storage.storage.from(signedUpload.bucket).uploadToSignedUrl(signedUpload.path, signedUpload.token, file, { contentType: file.type || undefined });
+    if (error) throw new Error("Không thể upload tệp lên storage.");
+    return request<{ id: string }>("/books/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storageKey: signedUpload.path }),
+    });
+  }
   const formData = new FormData();
   formData.append("file", file);
   return request<{ id: string }>("/books/upload", { method: "POST", body: formData });
@@ -90,3 +107,4 @@ export const createBookmark = (bookId: string, payload: { chapterId: string; cha
   body: JSON.stringify(payload),
 });
 export const deleteBookmark = (bookId: string, bookmarkId: string) => request<void>(`/reader/bookmarks/${bookId}/${bookmarkId}`, { method: "DELETE" });
+import { createClient } from "@supabase/supabase-js";
