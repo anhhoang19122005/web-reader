@@ -36,10 +36,10 @@ components:
 ---
 
 ## Overview
-Một góc đọc yên, xanh rêu làm điểm nhấn. Ba chế độ Sáng/Giấy/Tối dùng chung token CSS; màu chọn theo sở thích người đọc, không theo màn hình.
+Một góc đọc yên, xanh rêu làm điểm nhấn. Bảy chế độ Sáng/Giấy/Tối/Rừng/Biển/Anh đào/Hoàng hôn dùng chung token CSS; màu chọn theo sở thích người đọc, không theo màn hình.
 
 ## Colors
-Token thực thi nằm trong globals.css. Sáng: nền #f5f7f3, surface trắng, accent #365b40. Tối: nền #151d18, surface #1d2921, chữ #e5ebdf, accent #b4cf9a. Highlight dùng accent-soft riêng mỗi theme.
+Token thực thi nằm trong globals.css. Sáng: nền #f5f7f3, surface trắng, accent #365b40. Tối: nền #151d18, surface #1d2921, chữ #e5ebdf, accent #b4cf9a. Highlight dùng accent-soft riêng mỗi theme. Rừng: nền #18251e, accent #b1d099. Biển: nền #edf4f7, accent #245f76. Anh đào: nền #faf0f3, accent #8f4564. Hoàng hôn: nền #292126, accent #edb294. Lá rơi đổi màu nhẹ theo palette. Nhãn theme và ô màu giúp phân biệt bằng cả chữ lẫn màu.
 
 ## Typography
 Georgia dành cho thương hiệu, tiêu đề sách và trang. Arial cho nội dung đọc, nút và nhãn; word-spacing và letter-spacing normal. Cỡ đọc 18/20/24px, line-height 32/36/40px. Cột Reader tối đa 760px gồm padding.

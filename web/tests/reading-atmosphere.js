@@ -37,9 +37,9 @@ async (page) => {
   await page.screenshot({ animations: "disabled", path: ".reader-deploy/design-reader.png" });
   await page.locator(".player-settings summary").click();
   const luminance = (rgb) => rgb.slice(0, 3).map((v) => { v /= 255; return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }).reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
-  for (const theme of ["Sáng", "Giấy", "Tối"]) {
+  for (const theme of ["Sáng", "Giấy", "Tối", "Rừng", "Biển", "Anh đào", "Hoàng hôn"]) {
     await page.getByRole("button", { name: theme, exact: true }).click();
-    await page.waitForFunction((value) => document.documentElement.dataset.theme === value, { Sáng: "light", Giấy: "sepia", Tối: "dark" }[theme]);
+    await page.waitForFunction((value) => document.documentElement.dataset.theme === value, { Sáng: "light", Giấy: "sepia", Tối: "dark", Rừng: "forest", Biển: "ocean", "Anh đào": "sakura", "Hoàng hôn": "sunset" }[theme]);
     const colors = await page.locator("main").evaluate((el) => {
       const style = getComputedStyle(el);
       return [style.color, style.backgroundColor].map((s) => s.match(/\d+/g).map(Number));
@@ -76,7 +76,9 @@ async (page) => {
   await page.locator(".player-settings summary").click();
   await page.getByLabel("Lá rơi nhẹ").uncheck();
   assert(await page.locator(".falling-leaf").count() === 0, "Leaf toggle must stop decoration");
+  await page.getByRole("button", { name: "Anh đào", exact: true }).click();
   await page.reload();
+  await page.waitForFunction(() => document.documentElement.dataset.theme === "sakura");
   await page.getByRole("button", { name: "▶ Đọc", exact: true }).waitFor();
   await page.locator(".player-settings summary").click();
   assert(!(await page.getByLabel("Lá rơi nhẹ").isChecked()), "Leaf preference must persist");

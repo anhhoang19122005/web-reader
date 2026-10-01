@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createBookmark, deleteBookmark, getBook, getBookmarks, getChapter, getProgress, saveProgress, TtsChunk } from "../lib/api";
 import { TtsPlayer } from "./TtsPlayer";
-import { useReadingPreferences } from "../lib/reading-preferences";
+import { readingThemes, useReadingPreferences, type ReadingTheme } from "../lib/reading-preferences";
 import { useTtsSession } from "../lib/tts-session";
 
 function highlightedText(text: string, chunks: TtsChunk[], activeChunk: number | null): ReactNode[] {
@@ -32,7 +32,7 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
   const queryClient = useQueryClient();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const { theme, textStyle } = useReadingPreferences();
-  const setTheme = (theme: "light" | "sepia" | "dark") => useReadingPreferences.setState({ theme });
+  const setTheme = (theme: ReadingTheme) => useReadingPreferences.setState({ theme });
   const setTextStyle = (textStyle: "compact" | "comfortable" | "large") => useReadingPreferences.setState({ textStyle });
   const [ttsChunk, setTtsChunk] = useState<TtsChunk | null>(null);
   const [followReading, setFollowReading] = useState(true);
@@ -142,7 +142,7 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
     <header className="site-header sticky top-0 z-20"><Link className="wordmark" href={`/library/${bookId}`}>Gác Sách</Link><span className="max-w-48 truncate text-sm text-muted">{bookQuery.data.title}</span></header>
     <article className={`mx-auto reader-column px-6 py-8 md:px-8 ${textStyleClass}`}><p className="font-sans text-sm text-muted">{bookQuery.data.author}</p><h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">{chapterQuery.data.title}</h1>
 
-      <div ref={playerContainerRef} className={`sticky top-16 z-10 mt-5 rounded-xl reader-dock ${themeStyle}`}><TtsPlayer readerSettings={<div className="reader-settings"><span className="mr-1 self-center text-muted">Giao diện</span>{(["light", "sepia", "dark"] as const).map((option) => <button className="rounded-full border border-current/20 px-3 py-1.5 hover:bg-current/10" aria-pressed={theme === option} key={option} onClick={() => setTheme(option)}>{option === "light" ? "Sáng" : option === "sepia" ? "Giấy" : "Tối"}</button>)}<span className="ml-2 self-center text-muted">Cỡ chữ</span>{(["compact", "comfortable", "large"] as const).map((option) => <button className="rounded-full border border-current/20 px-3 py-1.5 hover:bg-current/10" aria-pressed={textStyle === option} key={option} onClick={() => setTextStyle(option)}>{option === "compact" ? "Nhỏ" : option === "comfortable" ? "Vừa" : "Lớn"}</button>)}</div>} key={chapterId} chapterId={chapterId} initialPosition={progressQuery.isLoading ? undefined : progressQuery.data?.chapterId === chapterId ? progressQuery.data.characterPosition : 0} onProgress={handleTtsProgress} onChunkChange={handleTtsChunk} onComplete={() => {
+      <div ref={playerContainerRef} className={`sticky top-16 z-10 mt-5 rounded-xl reader-dock ${themeStyle}`}><TtsPlayer readerSettings={<div className="reader-settings"><span className="mr-1 self-center text-muted">Giao diện</span><div className="theme-options" role="group" aria-label="Theme giao diện">{readingThemes.map((option) => <button className="theme-option" aria-pressed={theme === option.id} key={option.id} onClick={() => setTheme(option.id)}><span className="theme-swatch" aria-hidden="true" style={{ backgroundColor: option.color }} />{option.name}</button>)}</div><span className="ml-2 self-center text-muted">Cỡ chữ</span>{(["compact", "comfortable", "large"] as const).map((option) => <button className="rounded-full border border-current/20 px-3 py-1.5 hover:bg-current/10" aria-pressed={textStyle === option} key={option} onClick={() => setTextStyle(option)}>{option === "compact" ? "Nhỏ" : option === "comfortable" ? "Vừa" : "Lớn"}</button>)}</div>} key={chapterId} chapterId={chapterId} initialPosition={progressQuery.isLoading ? undefined : progressQuery.data?.chapterId === chapterId ? progressQuery.data.characterPosition : 0} onProgress={handleTtsProgress} onChunkChange={handleTtsChunk} onComplete={() => {
         if (!useTtsSession.getState().running) return;
         if (nextChapter) selectChapter(nextChapter.id, true);
         else useTtsSession.setState({ running: false, autoplayChapterId: "" });
