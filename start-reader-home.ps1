@@ -1,5 +1,5 @@
 #requires -Version 7.4
-param([switch]$Publish, [ValidateRange(1, 65535)][int]$Port = 8083)
+param([switch]$Publish, [switch]$Restart, [ValidateRange(1, 65535)][int]$Port = 8083)
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $work = Join-Path $root '.reader-deploy'
@@ -22,6 +22,7 @@ foreach ($line in Get-Content -LiteralPath (Join-Path $root '.env')) {
     }
 }
 $env:PORT = [string]$Port
+& (Join-Path $root 'start-reader-vieneu.ps1')
 $localApiUrl = "http://127.0.0.1:$Port"
 $env:READER_ACCESS_TOKEN = $credentials.apiToken
 $env:PIPER_ENABLED = 'true'
@@ -35,6 +36,16 @@ if (-not (Test-Path -LiteralPath $env:PIPER_BIN)) { throw 'Chạy start-reader-g
 $headers = @{ 'X-Reader-Token' = $credentials.apiToken }
 $healthy = $false
 try { $healthy = (Invoke-RestMethod -Uri "$localApiUrl/api/health" -Headers $headers -TimeoutSec 2).status -eq 'UP' } catch {}
+if ($Restart -and $healthy) {
+    $pidPath = Join-Path $work 'api.pid'
+    if (-not (Test-Path -LiteralPath $pidPath)) { throw 'Không tìm thấy PID của API do script quản lý.' }
+    $managedPid = [int](Get-Content -LiteralPath $pidPath)
+    $managed = Get-CimInstance Win32_Process -Filter "ProcessId=$managedPid"
+    $expected = Join-Path $work "reader-home-api-$Port.exe"
+    if (-not $managed -or $managed.ExecutablePath -ne $expected) { throw 'API không thuộc script này; không tự dừng process khác.' }
+    Stop-Process -Id $managedPid
+    $healthy = $false
+}
 if (-not $healthy) {
     if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue) { throw "Port $Port đã được dùng bởi process khác. Không tự dừng process." }
     $binary = Join-Path $work "reader-home-api-$Port.exe"

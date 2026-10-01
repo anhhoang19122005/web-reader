@@ -73,6 +73,40 @@ Dữ liệu được lưu trong các collection `books`, `chapters`, `reading_pr
 
 ## Deploy Vercel
 
+### Thiền Tâm Đức — VieNeu local
+
+Đặt checkout VieNeu-TTS và môi trường Python đã cài tại `test/VieNeu-TTS`.
+`start-reader-vieneu.ps1` dùng API có sẵn `apps.openai_speech`, chỉ lắng nghe
+`127.0.0.1:8000`, chạy ONNX int8 trên CPU và giữ model trong RAM.
+Hai script Reader gọi helper này khi tìm thấy `.venv/Scripts/python.exe`.
+Đặt `VIENEU_ENABLED=false` nếu muốn bỏ qua hoặc cấu hình Go API thủ công:
+
+```text
+VIENEU_API_URL=http://127.0.0.1:8000/v1
+```
+
+Giọng xuất hiện trong provider `VieNeu · Local`. Preset nguồn có tên chính xác
+`Thiền Tâm Đức`. API v3 hiện bỏ qua tốc độ tổng hợp/cao độ, nên player khóa hai
+thông số này; dùng `Tốc độ phát lại` để nghe nhanh/chậm. Cache, đọc liên tục và
+lưu tiến độ vẫn dùng luồng Reader hiện có. Không commit checkout hay model.
+
+Khi cập nhật API đang chạy bằng script home:
+
+```powershell
+pwsh -File .\start-reader-home.ps1 -Restart -Publish
+```
+
+`-Restart` chỉ dừng binary API được script quản lý và kiểm tra đúng path/PID.
+Container Piper không tự chứa VieNeu; cần chạy dịch vụ VieNeu riêng và đặt URL.
+
+Thử tổng hợp riêng, không sửa tiến độ sách:
+
+```powershell
+cd go-api
+$env:VIENEU_INTEGRATION_URL='http://127.0.0.1:8000/v1'
+go test -run TestVieNeuLocalIntegration -v
+```
+
 ### Deploy có giọng Piper
 
 Đặt web trên Vercel, còn Go API chạy Docker Linux amd64 trên máy chủ hỗ trợ

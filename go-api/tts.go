@@ -61,7 +61,7 @@ func (a *App) voices() []ttsVoice {
 		voices = append(voices, a.configuredSaydiVoice())
 	}
 	// Cộng thêm giọng local offline, giữ nguyên thứ tự Edge/Saydi cũ.
-	voices = append(voices, localVoices(a.config.PiperEnabled)...)
+	voices = append(voices, a.offlineVoices()...)
 	if len(voices) == 0 {
 		return []ttsVoice{{ID: "vi-mock-narrator", Provider: "mock", Name: "Demo · giọng im lặng", Language: "vi-VN", Gender: "neutral", Style: "narrator"}}
 	}
@@ -200,7 +200,7 @@ func (a *App) availableVoices(ctx context.Context) []ttsVoice {
 		voices := append([]ttsVoice(nil), a.saydiVoices...)
 		a.saydiVoicesMu.Unlock()
 		// Cộng thêm giọng local offline, giữ nguyên thứ tự Edge/Saydi cũ.
-		return append(append(edgeVoices(a.config.EdgeEnabled), voices...), localVoices(a.config.PiperEnabled)...)
+		return append(append(edgeVoices(a.config.EdgeEnabled), voices...), a.offlineVoices()...)
 	}
 	a.saydiVoicesMu.Unlock()
 
@@ -234,7 +234,7 @@ func (a *App) availableVoices(ctx context.Context) []ttsVoice {
 	a.saydiVoicesMu.Unlock()
 	if len(cached) > 0 {
 		// Cộng thêm giọng local offline, giữ nguyên thứ tự Edge/Saydi cũ.
-		return append(append(edgeVoices(a.config.EdgeEnabled), cached...), localVoices(a.config.PiperEnabled)...)
+		return append(append(edgeVoices(a.config.EdgeEnabled), cached...), a.offlineVoices()...)
 	}
 	return a.voices()
 }
@@ -313,6 +313,9 @@ func (a *App) generateTTS(w http.ResponseWriter, r *http.Request) *apiError {
 	// pitch): chuẩn hóa trước khi hash/cache để cùng đoạn văn không sinh doc trùng.
 	// Edge/Saydi giữ nguyên giá trị request như cũ.
 	effectivePitch, effectiveVolume := request.Pitch, request.Volume
+	if request.VoiceID == vieNeuVoiceID {
+		request.SpeakingRate, effectivePitch, effectiveVolume = 1, 0, 1
+	}
 	if isLocalVoiceID(request.VoiceID) {
 		effectivePitch, effectiveVolume = 0, 1
 	}
@@ -418,6 +421,9 @@ func (a *App) synthesize(ctx context.Context, voice ttsVoice, text string, rate,
 	duration := maxInt(800, len([]rune(text))*35)
 	if voice.Provider == "mock" {
 		return mockAudio(duration), "audio/wav", duration, nil
+	}
+	if voice.Provider == "vieneu" {
+		return a.vieNeuAudio(ctx, text)
 	}
 	if voice.Provider == "local" || isLocalVoiceID(voice.ID) {
 		return a.piperAudio(ctx, voice.ID, text, rate)

@@ -23,6 +23,7 @@ const singleUserID = "00000000-0000-0000-0000-000000000001"
 
 type Config struct {
 	AccessToken     string
+	VieNeuURL       string
 	MongoURI        string
 	MongoDatabase   string
 	StorageProvider string
@@ -83,6 +84,7 @@ func LoadConfig() Config {
 	}
 	return Config{
 		AccessToken:     os.Getenv("READER_ACCESS_TOKEN"),
+		VieNeuURL:       strings.TrimRight(os.Getenv("VIENEU_API_URL"), "/"),
 		MongoURI:        env("MONGODB_URI", "mongodb://localhost:27017"),
 		MongoDatabase:   env("MONGODB_DATABASE", "novel_reader"),
 		StorageProvider: env("STORAGE_PROVIDER", "local"),

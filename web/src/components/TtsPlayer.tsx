@@ -6,7 +6,7 @@ import { apiUrl, generateTts, getTtsChunks, getTtsVoices, type TtsChunk, type Tt
 import { useTtsSession } from "../lib/tts-session";
 import { audioPosition, resumePoint } from "../lib/tts-progress";
 
-const providerLabels: Record<string, string> = { edge: "Edge-TTS", saydi: "SaydiVoice", mock: "Demo", local: "Local · Offline" };
+const providerLabels: Record<string, string> = { edge: "Edge-TTS", saydi: "SaydiVoice", mock: "Demo", local: "Local · Offline", vieneu: "VieNeu · Local" };
 const ttsAudioCacheTime = 24 * 60 * 60 * 1000;
 type TtsPayload = Parameters<typeof generateTts>[0];
 type BufferedAudio = { index: number; settings: string; url: string };
@@ -90,9 +90,11 @@ export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChang
   const visibleVoices = provider === "all" ? allVoices : allVoices.filter((voice) => voice.provider === provider);
   const selectedVoice = visibleVoices.some((voice) => voice.id === voiceId) ? voiceId : visibleVoices.find((voice) => voice.provider === "local")?.id || visibleVoices.find((voice) => voice.provider === "edge")?.id || visibleVoices[0]?.id || "";
   const selectedVoiceInfo = visibleVoices.find((voice) => voice.id === selectedVoice);
-  const isFixedPitchProvider = selectedVoiceInfo?.provider === "saydi" || selectedVoiceInfo?.provider === "local";
+  const isVieNeu = selectedVoiceInfo?.provider === "vieneu";
+  const isFixedPitchProvider = selectedVoiceInfo?.provider === "saydi" || selectedVoiceInfo?.provider === "local" || isVieNeu;
   const effectivePitch = isFixedPitchProvider ? 0 : pitch;
-  const audioSettings = JSON.stringify([chapterId, selectedVoiceInfo?.provider, selectedVoice, speakingRate, effectivePitch]);
+  const effectiveRate = isVieNeu ? 1 : speakingRate;
+  const audioSettings = JSON.stringify([chapterId, selectedVoiceInfo?.provider, selectedVoice, effectiveRate, effectivePitch]);
 
   useEffect(() => {
     const buffered = bufferedAudio.current;
@@ -147,7 +149,7 @@ export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChang
   function chunkRequest(index: number) {
     const chunk = chunks.data?.[index];
     if (!chunk || !selectedVoiceInfo) return null;
-    const payload = { chapterId, chunkIndex: index, voiceId: selectedVoice, speakingRate, pitch: effectivePitch, volume: 1 };
+    const payload = { chapterId, chunkIndex: index, voiceId: selectedVoice, speakingRate: effectiveRate, pitch: effectivePitch, volume: 1 };
     const queryKey = ttsAudioKey(payload, chunk.text, selectedVoiceInfo.provider);
     return { chunk, payload, queryKey, audioKey: JSON.stringify(queryKey), settings: audioSettings };
   }
@@ -286,7 +288,7 @@ export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChang
       <select className="rounded-lg border border-current/20 bg-transparent px-2 py-2" aria-label="Nhà cung cấp giọng đọc" value={provider} onChange={(event) => { invalidateSetting(); setProvider(event.target.value); setVoiceId(""); }}><option value="all">Tất cả nhà cung cấp</option>{providers.map((value) => <option key={value} value={value}>{providerLabels[value] ?? value} ({allVoices.filter((voice) => voice.provider === value).length})</option>)}</select>
       <select className="rounded-lg border border-current/20 bg-transparent px-2 py-2" aria-label="Giọng đọc" value={selectedVoice} onChange={(event) => { invalidateSetting(); setVoiceId(event.target.value); }}>{providers.map((value) => { const grouped = visibleVoices.filter((voice) => voice.provider === value); return grouped.length ? <optgroup key={value} label={providerLabels[value] ?? value}>{grouped.map((voice) => <option key={voice.id} value={voice.id}>{voice.name}</option>)}</optgroup> : null; })}</select>
       <select className="rounded-lg border border-current/20 bg-transparent px-2 py-2" aria-label="Preset giọng" value={preset} onChange={(event) => applyPreset(event.target.value)}><option value="narrator">Narrator</option><option value="deep">Deep male</option><option value="soft">Soft female</option><option value="fantasy">Fantasy</option><option value="romance">Romance</option><option value="mystery">Mystery</option><option value="taothao">Tào Tháo</option></select>
-      <label className="flex items-center gap-1">Tốc độ <input aria-label="Tốc độ" type="range" min="0.5" max="2" step="0.1" value={speakingRate} onChange={(event) => { invalidateSetting(); setSpeakingRate(Number(event.target.value)); }} /> {speakingRate}x</label>
+      <label className="flex items-center gap-1">Tốc độ <input aria-label="Tốc độ" type="range" min="0.5" max="2" step="0.1" value={effectiveRate} disabled={isVieNeu} title={isVieNeu ? "VieNeu chưa hỗ trợ tốc độ tổng hợp; dùng Tốc độ phát lại" : undefined} onChange={(event) => { invalidateSetting(); setSpeakingRate(Number(event.target.value)); }} /> {effectiveRate}x</label>
       <label className="flex items-center gap-1">Cao độ <input aria-label="Cao độ" type="range" min="-20" max="20" step="1" value={pitch} disabled={isFixedPitchProvider} title={selectedVoiceInfo?.provider === "saydi" ? "SaydiVoice chưa hỗ trợ cao độ" : selectedVoiceInfo?.provider === "local" ? "Giọng local offline chưa hỗ trợ cao độ" : undefined} onChange={(event) => { invalidateSetting(); setPitch(Number(event.target.value)); }} /> {isFixedPitchProvider ? "Không hỗ trợ" : pitch}</label>
       <label className="flex items-center gap-1">Âm lượng <input aria-label="Âm lượng" type="range" min="0" max="1" step="0.1" value={volume} onChange={(event) => { const next = Number(event.target.value); setVolume(next); if (audioRef.current) audioRef.current.volume = next; }} /> {Math.round(volume * 100)}%</label>
       <label className="flex items-center gap-1">Phát lại <select aria-label="Tốc độ phát lại" className="rounded-lg border border-current/20 bg-transparent px-2 py-1" value={playbackRate} onChange={(event) => { const value = Number(event.target.value); setPlaybackRate(value); if (audioRef.current) audioRef.current.playbackRate = value; }}><option value="0.75">0.75x</option><option value="1">1x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option></select></label>

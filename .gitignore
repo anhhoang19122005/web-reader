@@ -4,6 +4,7 @@
 .vercel/
 .playwright-cli/
 .reader-deploy/
+/test/VieNeu-TTS/
 /*.onnx
 /*.onnx.json
 /input.txt

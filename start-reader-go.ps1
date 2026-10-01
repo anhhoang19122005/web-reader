@@ -27,6 +27,7 @@ if (Test-Path $envFile) {
 }
 
 $env:NEXT_PUBLIC_API_BASE_URL = "http://localhost:8081/api"
+& (Join-Path $root 'start-reader-vieneu.ps1')
 
 # --- Giọng local offline (Piper + 2 voice Việt miễn phí, cộng thêm) ---
 # Chỉ cài ở local; deploy Vercel đặt PIPER_ENABLED=false nên bỏ qua khối này.

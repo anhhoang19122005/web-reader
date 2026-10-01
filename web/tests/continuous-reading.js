@@ -18,7 +18,7 @@ async (page) => {
   await page.route("**/api/**", async (route) => {
     const path = route.request().url().split("/api")[1];
     const json = (data) => route.fulfill({ json: data });
-    if (path.endsWith("/tts/voices")) return json([{ id: "test-voice", provider: "edge", name: "Giọng kiểm thử", language: "vi" }]);
+    if (path.endsWith("/tts/voices")) return json([{ id: "test-voice", provider: "edge", name: "Giọng kiểm thử", language: "vi" }, { id: "vieneu-thien-tam-duc", provider: "vieneu", name: "Thiền Tâm Đức", language: "vi" }]);
     if (path.includes("/tts/chunks/")) return json([{ chunkIndex: 0, text: "Tiếng Việt", startCharacter: 0, endCharacter: 10 }]);
     if (path.endsWith("/tts/generate")) {
       requests.push(route.request().postDataJSON());
@@ -74,5 +74,13 @@ async (page) => {
   await page.reload();
   await page.getByRole("button", { name: "▶ Đọc", exact: true }).waitFor();
   assert(await page.locator("audio").evaluate((a) => !a.getAttribute("src")), "Reload must not autoplay");
+  await page.getByLabel("Nhà cung cấp giọng đọc").selectOption("vieneu");
+  assert(await page.getByLabel("Tốc độ", { exact: true }).isDisabled(), "VieNeu ignores synthesis rate");
+  assert(await page.getByLabel("Cao độ", { exact: true }).isDisabled(), "VieNeu ignores pitch");
+  await page.getByRole("button", { name: "▶ Đọc", exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector("audio").paused);
+  const last = requests[requests.length - 1];
+  assert(last.voiceId === "vieneu-thien-tam-duc" && last.speakingRate === 1 && last.pitch === 0, "VieNeu must use fixed synthesis settings");
+  await page.getByRole("button", { name: "■ Dừng", exact: true }).click();
   return "PASS: continuous chapters, preserved voice/settings, stop, delayed request, final chapter, reload, typography";
 }
