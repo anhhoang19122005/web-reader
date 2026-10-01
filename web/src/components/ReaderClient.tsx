@@ -35,6 +35,7 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
   const [ttsChunk, setTtsChunk] = useState<TtsChunk | null>(null);
   const [followReading, setFollowReading] = useState(true);
   const textContainerRef = useRef<HTMLDivElement | null>(null);
+  const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const followReadingRef = useRef(true);
   const lastAutoScroll = useRef(0);
   const bookQuery = useQuery({ queryKey: ["book", bookId], queryFn: () => getBook(bookId) });
@@ -89,11 +90,12 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
       const node = textContainerRef.current?.querySelector("mark");
       if (!(node instanceof HTMLElement) || !followReadingRef.current) return;
       const rect = node.getBoundingClientRect();
-      const outOfView = rect.top < 96 || rect.bottom > window.innerHeight - 40;
+      const topInset = 64 + (playerContainerRef.current?.offsetHeight ?? 0) + 16;
+      const outOfView = rect.top < topInset || rect.bottom > window.innerHeight - 40;
       if (!outOfView) return;
       lastAutoScroll.current = Date.now();
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      node.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+      window.scrollTo({ top: window.scrollY + rect.top - topInset, behavior: reduceMotion ? "auto" : "smooth" });
     });
     return () => cancelAnimationFrame(frame);
   }, [ttsChunk, followReading]);
@@ -138,7 +140,7 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
     <header className={`sticky top-0 z-10 flex h-16 items-center justify-between border-b border-stone-200 px-5 backdrop-blur md:px-8 ${theme === "dark" ? "bg-stone-950/95" : "bg-[#fbf8f2]/95"}`}><Link className="font-serif text-xl font-semibold tracking-tight" href={`/library/${bookId}`}>Gác Sách</Link><span className="max-w-48 truncate text-sm opacity-60">{bookQuery.data.title}</span></header>
     <article className={`mx-auto max-w-2xl px-5 py-12 font-serif md:px-8 ${textStyleClass}`}><p className="font-sans text-sm opacity-60">{bookQuery.data.author}</p><h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">{chapterQuery.data.title}</h1>
       <div className="mt-8 flex flex-wrap gap-2 border-y border-current/10 py-3 font-sans text-xs"><span className="mr-1 self-center opacity-60">Giao diện</span>{(["light", "sepia", "dark"] as const).map((option) => <button className="rounded-full border border-current/20 px-3 py-1.5 hover:bg-current/10" aria-pressed={theme === option} key={option} onClick={() => setTheme(option)}>{option === "light" ? "Sáng" : option === "sepia" ? "Giấy" : "Tối"}</button>)}<span className="ml-2 self-center opacity-60">Cỡ chữ</span>{(["compact", "comfortable", "large"] as const).map((option) => <button className="rounded-full border border-current/20 px-3 py-1.5 hover:bg-current/10" aria-pressed={textStyle === option} key={option} onClick={() => setTextStyle(option)}>{option === "compact" ? "Nhỏ" : option === "comfortable" ? "Vừa" : "Lớn"}</button>)}</div>
-      <div className="mt-5"><TtsPlayer key={chapterId} chapterId={chapterId} initialPosition={progressQuery.isLoading ? undefined : progressQuery.data?.chapterId === chapterId ? progressQuery.data.characterPosition : 0} onProgress={handleTtsProgress} onChunkChange={handleTtsChunk} onComplete={() => {
+      <div ref={playerContainerRef} className={`sticky top-16 z-10 mt-5 max-h-[50dvh] overflow-y-auto rounded-xl py-2 shadow-sm ${themeStyle}`}><TtsPlayer key={chapterId} chapterId={chapterId} initialPosition={progressQuery.isLoading ? undefined : progressQuery.data?.chapterId === chapterId ? progressQuery.data.characterPosition : 0} onProgress={handleTtsProgress} onChunkChange={handleTtsChunk} onComplete={() => {
         if (!useTtsSession.getState().running) return;
         if (nextChapter) selectChapter(nextChapter.id, true);
         else useTtsSession.setState({ running: false, autoplayChapterId: "" });
