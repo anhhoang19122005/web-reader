@@ -33,7 +33,7 @@ type Config struct {
 	SaydiVoiceName  string
 	AllowedOrigins  map[string]bool
 	EdgeEnabled     bool
-	// Local Piper TTS (offline, miễn phí). Chỉ bật ở local; Vercel đặt PIPER_ENABLED=false.
+	// Piper TTS chạy trên Windows hoặc Docker Linux; Vercel Functions đặt false.
 	PiperEnabled        bool
 	PiperBin            string
 	PiperEspeakData     string

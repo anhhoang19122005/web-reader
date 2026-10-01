@@ -33,7 +33,8 @@ volume xử lý ở player) và map `speakingRate` sang `length_scale` của Pip
 Preset **Tào Tháo** (`0.85x`) trên web hợp nhất với Duy Siêu Trầm.
 Model cộng đồng từ dataset `lamyaya88a/tts-ngochuyen-v1` (HuggingFace), kiểm tra
 lại điều khoản trước khi dùng thương mại. Deploy Vercel đặt `PIPER_ENABLED=false`
-để ẩn giọng local (serverless không chạy Piper).
+để ẩn giọng local trong cấu hình Vercel Functions hiện tại. Khi deploy Docker,
+giữ `PIPER_ENABLED=true` và xem hướng dẫn bên dưới.
 
 Sau đó chạy tại thư mục `Reader`:
 
@@ -71,6 +72,52 @@ go run ./cmd/migrate
 Dữ liệu được lưu trong các collection `books`, `chapters`, `reading_progress`, `bookmarks` và `audio_chunks`. Chapter nằm riêng để không vượt giới hạn 16 MiB của một BSON document.
 
 ## Deploy Vercel
+
+### Deploy có giọng Piper
+
+Đặt web trên Vercel, còn Go API chạy Docker Linux amd64 trên máy chủ hỗ trợ
+container. Dockerfile cài Piper và tải hai model giống bản Windows lúc build;
+không cần commit model hay dùng API key TTS. Audio được tạo trên máy chủ và
+trả về trình duyệt; điện thoại không cần cài Piper.
+
+Build từ thư mục repo:
+
+```powershell
+docker build --platform linux/amd64 -t reader-api-piper ./go-api
+```
+
+Thiết lập biến môi trường trên máy chủ:
+
+```text
+MONGODB_URI=<cùng Atlas URI đang dùng>
+MONGODB_DATABASE=novel_reader
+AUTO_MIGRATE=true
+STORAGE_PROVIDER=supabase
+SUPABASE_URL=<Supabase URL>
+SUPABASE_SERVICE_ROLE_KEY=<server-only-key>
+SUPABASE_STORAGE_BUCKET=reader
+CORS_ALLOWED_ORIGINS=https://<web-project>.vercel.app
+PIPER_ENABLED=true
+```
+
+Giữ các đường dẫn `PIPER_*` mặc định của image; không đưa đường dẫn Windows
+từ `.env` local vào container. Máy chủ có thể đặt `PORT` theo yêu cầu nền tảng.
+Web đặt `NEXT_PUBLIC_API_BASE_URL=https://<container-api>/api` rồi redeploy.
+MongoDB lưu tiến độ, Supabase lưu sách/audio bền vững sau khi container restart.
+Khuyến nghị khởi đầu 2 CPU, 2 GB RAM rồi đo thời gian tạo audio thực tế.
+Giọng Piper không tốn phí API; máy chủ chạy model vẫn có thể phát sinh chi phí.
+Kiểm tra điều khoản model trước khi phân phối hoặc dùng thương mại.
+
+Kiểm tra Piper trong image, không cần database:
+
+```powershell
+docker run --rm --entrypoint sh reader-api-piper -c 'printf "Xin chào, đây là giọng đọc tiếng Việt." | /opt/piper/piper --model /opt/piper/voices/duy_oryx.onnx --config /opt/piper/voices/duy_oryx.onnx.json --espeak_data /opt/piper/espeak-ng-data --output_file /tmp/test.wav && test -s /tmp/test.wav'
+```
+
+Trước khi mở API công khai, cần bổ sung xác thực vì bản hiện tại dùng một
+user cố định cho thư viện và tiến độ.
+
+### Deploy Go API bằng Vercel Functions
 
 Tạo hai Vercel projects từ cùng GitHub repo:
 

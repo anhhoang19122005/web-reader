@@ -4,8 +4,8 @@ package readerapi
 // Hai giọng Việt miễn phí:
 //   - local-duyoryx-sieutram: Duy Siêu Trầm, uy nghiêm quyền lực (kiểu Tào Tháo).
 //   - local-ngocngan-kechuyen: Ngọc Ngạn, trầm ấm kể chuyện.
-// Chạy local-only (Windows dev): script start-reader-go.ps1 tự tải piper.exe,
-// model .onnx và espeak-ng-data vào tools/piper/. Vercel đặt PIPER_ENABLED=false.
+// Windows: start-reader-go.ps1 tải piper.exe; Docker: cài Piper Linux + models.
+// Vercel Functions dùng PIPER_ENABLED=false; deploy container dùng true.
 
 import (
 	"bytes"
