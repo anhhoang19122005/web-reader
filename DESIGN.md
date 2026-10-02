@@ -42,13 +42,13 @@ Một góc đọc yên, xanh rêu làm điểm nhấn. Bảy chế độ Sáng/G
 Token thực thi nằm trong globals.css. Sáng: nền #f5f7f3, surface trắng, accent #365b40. Tối: nền #151d18, surface #1d2921, chữ #e5ebdf, accent #b4cf9a. Highlight dùng accent-soft riêng mỗi theme. Rừng: nền #18251e, accent #b1d099. Biển: nền #edf4f7, accent #245f76. Anh đào: nền #faf0f3, accent #8f4564. Hoàng hôn: nền #292126, accent #edb294. Lá rơi đổi màu nhẹ theo palette. Nhãn theme và ô màu giúp phân biệt bằng cả chữ lẫn màu.
 
 ## Typography
-Georgia dành cho thương hiệu, tiêu đề sách và trang. Arial cho nội dung đọc, nút và nhãn; word-spacing và letter-spacing normal. Cỡ đọc 18/20/24px, line-height 32/36/40px. Cột Reader tối đa 760px gồm padding.
+Georgia dành cho thương hiệu, tiêu đề sách và trang. Arial cho nội dung đọc, nút và nhãn; word-spacing và letter-spacing normal. Cỡ đọc 16–28px (mặc định 20px), giãn dòng 1.5–2.2 (mặc định 1.8), Sans Arial hoặc Serif Georgia. Cột đọc 60/68/75ch (mặc định 68ch), giới hạn theo màn hình. Giữ offset UTF-16 khi đổi bố cục; dữ liệu Nhỏ/Vừa/Lớn cũ chuyển thành 18/20/24px.
 
 ## Layout
-Header 64px; Reader ghim player ngay dưới header. Thư viện dùng các hàng sách và mục đọc gần đây. Chi tiết sách đặt Đọc tiếp trước mục lục. Mobile gộp cài đặt về một cột.
+Header 64px; Reader ghim player ngay dưới header. Thư viện dùng các hàng sách và mục đọc gần đây. Chi tiết sách đặt Đọc tiếp trước mục lục. Mobile gộp cài đặt về một cột, có thanh hành động ở cạnh dưới. Mục lục dùng native dialog, tìm tên chương không phân biệt dấu. Chế độ tập trung ẩn giao diện nhưng giữ audio node, có nút thoát/dừng riêng. Thanh tiến độ chương ở cạnh trên; thời gian đọc chữ ước lượng 200 từ/phút.
 
 ## Components
-Nút chính xanh rêu, focus có outline. Panel một border, không lồng card. Cài đặt dùng details/summary bàn phím nguyên bản. Giữ audio controls để tua và tạm dừng. Loading, lỗi và empty state dùng cùng palette.
+Nút chính xanh rêu, focus có outline. Panel một border, không lồng card. Cài đặt dùng details/summary bàn phím nguyên bản. Giữ audio controls để tua và tạm dừng. Tùy chỉnh đồng bộ từng trường qua API, có queue localStorage khi offline; trạng thái phát/tập trung không đồng bộ. Phím F/T/D và ←/→ chỉ hoạt động ngoài vùng điều khiển/nhập liệu. Loading, lỗi và empty state dùng cùng palette.
 
 ## Motion
 Transition 180ms cho trạng thái điều khiển. Một lá rơi CSS mỗi 12–25 giây, kéo dài 10 giây, ở mép màn hình và không nhận tương tác. Tắt trên reduced motion, tạm dừng khi tab ẩn. Âm nền mặc định tắt, gain 0–30%; duck xuống 30% trong 250ms và phục hồi trong 800ms. Không thêm thư viện motion hoặc tải âm thanh ngoài.

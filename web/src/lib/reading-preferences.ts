@@ -12,26 +12,49 @@ export const readingThemes = [
 ] as const;
 export type ReadingTheme = typeof readingThemes[number]["id"];
 
+export type ReadingPreferences = {
+  theme: ReadingTheme; font: "sans" | "serif"; fontSize: number; lineHeight: number;
+  columnWidth: 60 | 68 | 75; leaves: boolean; sound: "brown" | "rain"; ambientVolume: number;
+};
+export const preferenceKeys = ["theme", "font", "fontSize", "lineHeight", "columnWidth", "leaves", "sound", "ambientVolume"] as const;
+export const defaultPreferences: ReadingPreferences = {
+  theme: "sepia", font: "sans", fontSize: 20, lineHeight: 1.8, columnWidth: 68,
+  leaves: true, sound: "brown", ambientVolume: 0.1,
+};
+
+export function validPreferences(saved: unknown): Partial<ReadingPreferences> {
+  if (!saved || typeof saved !== "object") return {};
+  const value = saved as Record<string, unknown>;
+  const result: Partial<ReadingPreferences> = {};
+  if (readingThemes.some((theme) => theme.id === value.theme)) result.theme = value.theme as ReadingTheme;
+  if (value.font === "sans" || value.font === "serif") result.font = value.font;
+  if (typeof value.fontSize === "number" && Number.isInteger(value.fontSize) && value.fontSize >= 16 && value.fontSize <= 28) result.fontSize = value.fontSize;
+  if (typeof value.lineHeight === "number" && value.lineHeight >= 1.5 && value.lineHeight <= 2.2 && Math.abs(value.lineHeight * 10 - Math.round(value.lineHeight * 10)) < 1e-8) result.lineHeight = value.lineHeight;
+  if (value.columnWidth === 60 || value.columnWidth === 68 || value.columnWidth === 75) result.columnWidth = value.columnWidth;
+  if (typeof value.leaves === "boolean") result.leaves = value.leaves;
+  if (value.sound === "brown" || value.sound === "rain") result.sound = value.sound;
+  if (typeof value.ambientVolume === "number" && Number.isFinite(value.ambientVolume)) result.ambientVolume = Math.max(0, Math.min(0.3, value.ambientVolume));
+  return result;
+}
+
 export const useReadingPreferences = create(persist(() => ({
-  theme: "sepia" as ReadingTheme,
-  textStyle: "comfortable" as "compact" | "comfortable" | "large",
-  leaves: true,
-  sound: "brown" as "brown" | "rain",
-  ambientVolume: 0.1,
+  ...defaultPreferences,
+  pending: {} as Partial<ReadingPreferences>,
+  ready: false,
+  syncStatus: "loading" as "loading" | "saved" | "pending" | "offline",
 }), {
   name: "gac-sach-preferences", skipHydration: true,
+  partialize: (state) => ({ ...Object.fromEntries(preferenceKeys.map((key) => [key, state[key]])), pending: state.pending }),
   merge: (saved, defaults) => {
-    const value = saved as Partial<typeof defaults> | null;
-    if (!value || typeof value !== "object") return defaults;
-    return {
-      theme: readingThemes.some((theme) => theme.id === value.theme) ? value.theme! : defaults.theme,
-      textStyle: ["compact", "comfortable", "large"].includes(value.textStyle ?? "") ? value.textStyle! : defaults.textStyle,
-      leaves: typeof value.leaves === "boolean" ? value.leaves : defaults.leaves,
-      sound: value.sound === "brown" || value.sound === "rain" ? value.sound : defaults.sound,
-      ambientVolume: typeof value.ambientVolume === "number" && Number.isFinite(value.ambientVolume) ? Math.max(0, Math.min(0.3, value.ambientVolume)) : defaults.ambientVolume,
-    };
+    const value = saved as Record<string, unknown> | null;
+    const preferences = validPreferences(saved);
+    if (preferences.fontSize === undefined && value?.textStyle) {
+      preferences.fontSize = ({ compact: 18, comfortable: 20, large: 24 } as Record<string, number>)[String(value.textStyle)] ?? 20;
+    }
+    return { ...defaults, ...preferences, pending: validPreferences(value?.pending) };
   },
 }));
 
-// Enabled is session-only: reload is always silent.
+// Session-only: reload is always silent and exits focus mode.
 export const useAmbientSession = create(() => ({ enabled: false }));
+export const useReaderSession = create(() => ({ focus: false }));

@@ -12,8 +12,13 @@ async (page) => {
   const assert = (value, message) => { if (!value) throw new Error(message); };
   const chapters = [{ id: "first", title: "Chương 1 · Bên hiên nhà", chapterNumber: 1 }];
   const book = { id: "nature-test", title: "Những ngày gió đi qua", author: "Người kể chuyện", chapterCount: 1, progressPercent: 42, lastReadAt: "2026-10-01T10:00:00Z", chapters };
+  let preferences = null;
   await page.route("**/api/**", async (route) => {
     const path = route.request().url().split("/api")[1];
+    if (path === "/reader/preferences") {
+      if (route.request().method() === "PATCH") preferences = { ...(preferences ?? {}), ...route.request().postDataJSON() };
+      return route.fulfill({ json: { preferences, updatedAt: null } });
+    }
     let data = {};
     if (path === "/books") data = [book];
     else if (path === "/books/nature-test") data = book;

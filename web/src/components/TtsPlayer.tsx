@@ -17,7 +17,7 @@ function ttsAudioKey(payload: TtsPayload, chunkText: string, provider: string) {
   return ["tts-audio", payload.chapterId, payload.chunkIndex, chunkText, provider, payload.voiceId, payload.speakingRate, payload.pitch, payload.volume] as const;
 }
 
-export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChange, onComplete, readerSettings }: { chapterId: string; initialPosition: number | undefined; onProgress: (position: number) => void; onChunkChange: (chunk: TtsChunk | null, info?: { auto: boolean }) => void; onComplete?: () => void; readerSettings?: ReactNode }) {
+export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChange, onComplete, readerSettings, onLayoutChange }: { chapterId: string; initialPosition: number | undefined; onProgress: (position: number) => void; onChunkChange: (chunk: TtsChunk | null, info?: { auto: boolean }) => void; onComplete?: () => void; readerSettings?: ReactNode; onLayoutChange?: () => void }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [chunkIndex, setChunkIndex] = useState(-1);
   const pendingSeek = useRef<number | null>(null);
@@ -45,6 +45,13 @@ export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChang
   const resume = resumePoint(chunks.data ?? [], initialPosition ?? 0);
   const displayedIndex = chunkIndex < 0 ? resume.index : chunkIndex;
   const audioReady = !voices.isLoading && !chunks.isLoading && initialPosition !== undefined;
+
+  useEffect(() => {
+    if (!running) {
+      playVersion.current++;
+      audioRef.current?.pause();
+    }
+  }, [running]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -289,7 +296,7 @@ export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChang
       <button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={!running} onClick={stop}>■ Dừng</button>
       <span className="voice-caption">{selectedVoiceInfo?.name}</span>
     </div>
-    <details className="player-settings"><summary>Cài đặt đọc & không gian</summary><div className="settings-body"><div className="settings-grid">
+    <details className="player-settings"><summary onClick={onLayoutChange}>Cài đặt đọc & không gian</summary><div className="settings-body"><div className="settings-grid">
       <select className="rounded-lg border border-current/20 bg-transparent px-2 py-2" aria-label="Nhà cung cấp giọng đọc" value={provider} onChange={(event) => { invalidateSetting(); setProvider(event.target.value); setVoiceId(""); }}><option value="all">Tất cả nhà cung cấp</option>{providers.map((value) => <option key={value} value={value}>{providerLabels[value] ?? value} ({allVoices.filter((voice) => voice.provider === value).length})</option>)}</select>
       <select className="rounded-lg border border-current/20 bg-transparent px-2 py-2" aria-label="Giọng đọc" value={selectedVoice} onChange={(event) => { invalidateSetting(); setVoiceId(event.target.value); }}>{providers.map((value) => { const grouped = visibleVoices.filter((voice) => voice.provider === value); return grouped.length ? <optgroup key={value} label={providerLabels[value] ?? value}>{grouped.map((voice) => <option key={voice.id} value={voice.id}>{voice.name}</option>)}</optgroup> : null; })}</select>
       <select className="rounded-lg border border-current/20 bg-transparent px-2 py-2" aria-label="Preset giọng" value={preset} onChange={(event) => applyPreset(event.target.value)}><option value="narrator">Narrator</option><option value="deep">Deep male</option><option value="soft">Soft female</option><option value="fantasy">Fantasy</option><option value="romance">Romance</option><option value="mystery">Mystery</option><option value="taothao">Tào Tháo</option></select>

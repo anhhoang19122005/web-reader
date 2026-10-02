@@ -187,3 +187,22 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<publishable-or-anon-key>
 `SUPABASE_SERVICE_ROLE_KEY` chỉ đặt ở API project. Web chỉ dùng key publishable/anon để upload qua signed URL ngắn hạn do API tạo.
 
 Backend Spring và PostgreSQL cũ vẫn nằm trong thư mục `api/`; chúng chỉ được dùng khi chạy `start-reader.ps1`.
+
+## Tùy chỉnh Reader và vị trí đọc
+
+- `GET /api/reader/preferences`: trả `{ preferences: null, updatedAt: null }` khi chưa lưu, hoặc object tùy chỉnh của người dùng cá nhân hiện tại.
+- `PATCH /api/reader/preferences`: gửi chỉ các trường thay đổi. Hỗ trợ `theme` (7 theme), `font` (`sans`/`serif`), `fontSize` (16–28, số nguyên), `lineHeight` (1.5–2.2, bước 0.1), `columnWidth` (60/68/75), `leaves` (boolean), `sound` (`brown`/`rain`), `ambientVolume` (0–0.3). Không nhận trường lạ hoặc trạng thái phát.
+- MongoDB dùng collection `reading_preferences`, `_id` là ID người dùng cố định hiện có; không cần migration/index mới. PATCH `$set` từng trường và `updatedAt`, không thay thế cả document.
+- Web dùng localStorage ngay, debounce PATCH 500ms, giữ trường chưa gửi được trong `pending`, thử lại khi trở lại tab/có kết nối và sau lỗi. Cấu hình server chỉ thay các trường local không có thay đổi đang chờ. Khi chưa có bản server, đưa bản local lên một lần.
+- Tiến độ/bookmark giữ nguyên UTF-16 `characterPosition` và schema hiện có. Cuộn tay đo vị trí qua DOM Range; khôi phục/đổi font/resize/cuộn TTS không tự ghi vị trí cuộn. Backend tiếp tục giữ mốc xa nhất.
+- Reader chỉ prefetch GET nội dung chương sau ở 70% hoặc đoạn TTS cuối; không tự tạo audio chương chưa nghe.
+- Phím tắt: F tập trung, T mục lục, D đổi theme, ←/→ đổi chương, Esc thoát tập trung/mục lục. Phím tắt bỏ qua vùng nhập liệu và audio.
+
+Kiểm tra trong trình duyệt (toàn bộ API mock, không ghi dữ liệu thật):
+
+```powershell
+playwright-cli open about:blank
+playwright-cli run-code --filename web/tests/reader-upgrades.js
+```
+
+`READER_INTEGRATION_TEST=true go test ./...` kiểm tra MongoDB bằng sách UUID thử riêng và database tùy chỉnh `rpt_<UUID>` riêng, tự dọn dữ liệu thử. Không sửa tùy chỉnh hoặc tiến độ sách thật. Sau cập nhật backend dùng `pwsh -File .\start-reader-home.ps1 -Restart -Publish` để khởi động lại API quản lý và cập nhật web.

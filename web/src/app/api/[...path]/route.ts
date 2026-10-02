@@ -36,4 +36,4 @@ async function forward(request: Request, context: RouteContext<"/api/[...path]">
   }
 }
 
-export { forward as GET, forward as HEAD, forward as POST, forward as PUT, forward as DELETE };
+export { forward as GET, forward as HEAD, forward as POST, forward as PUT, forward as PATCH, forward as DELETE };

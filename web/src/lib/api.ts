@@ -1,3 +1,4 @@
+import type { ReadingPreferences } from "./reading-preferences";
 export type BookSummary = {
   id: string;
   title: string;
@@ -109,3 +110,9 @@ export const createBookmark = (bookId: string, payload: { chapterId: string; cha
 });
 export const deleteBookmark = (bookId: string, bookmarkId: string) => request<void>(`/reader/bookmarks/${bookId}/${bookmarkId}`, { method: "DELETE" });
 import { createClient } from "@supabase/supabase-js";
+
+export type PreferencesResponse = { preferences: Partial<ReadingPreferences> | null; updatedAt: string | null };
+export const getReadingPreferences = (signal?: AbortSignal) => request<PreferencesResponse>("/reader/preferences", { signal });
+export const patchReadingPreferences = (values: Partial<ReadingPreferences>, signal?: AbortSignal) => request<PreferencesResponse>("/reader/preferences", {
+  method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(values), signal,
+});

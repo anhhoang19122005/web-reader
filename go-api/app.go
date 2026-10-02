@@ -153,6 +153,8 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && path == "/health":
 		writeJSON(w, http.StatusOK, map[string]string{"status": "UP"})
 		return
+	case (r.Method == http.MethodGet || r.Method == http.MethodPatch) && path == "/reader/preferences":
+		err = a.preferencesRoute(w, r)
 	case r.Method == http.MethodPost && path == "/books/upload":
 		err = a.uploadBook(w, r)
 	case r.Method == http.MethodPost && path == "/books/import":
@@ -197,7 +199,7 @@ func (a *App) allowCORS(w http.ResponseWriter, r *http.Request) bool {
 	if origin != "" && a.config.AllowedOrigins[origin] {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Vary", "Origin")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	}
 	if r.Method == http.MethodOptions {

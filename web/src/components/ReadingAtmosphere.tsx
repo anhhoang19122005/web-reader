@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useAmbientSession, useReadingPreferences } from "../lib/reading-preferences";
+import { useAmbientSession, useReadingPreferences, useReaderSession } from "../lib/reading-preferences";
 import { closeAmbient, setAmbientGain, startAmbient, suspendAmbient } from "../lib/ambient-audio";
 import { useTtsSession } from "../lib/tts-session";
 
@@ -12,9 +12,9 @@ export function ReadingAtmosphere() {
   const { theme, leaves, sound, ambientVolume } = useReadingPreferences();
   const enabled = useAmbientSession((s) => s.enabled);
   const speechPlaying = useTtsSession((s) => s.speechPlaying);
+  const focus = useReaderSession((s) => s.focus);
   const [leaf, setLeaf] = useState<{ id: number; side: string } | null>(null);
 
-  useEffect(() => { void useReadingPreferences.persist.rehydrate(); }, []);
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   useEffect(() => {
     if (!inReader || !enabled) { closeAmbient(); if (!inReader) useAmbientSession.setState({ enabled: false }); return; }
@@ -32,7 +32,7 @@ export function ReadingAtmosphere() {
   useEffect(() => () => closeAmbient(), []);
 
   useEffect(() => {
-    if (!leaves) return;
+    if (!leaves || focus) return;
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     let timer: ReturnType<typeof setTimeout>;
     let sequence = 0;
@@ -48,9 +48,9 @@ export function ReadingAtmosphere() {
     document.addEventListener("visibilitychange", schedule);
     media.addEventListener("change", schedule);
     return () => { clearTimeout(timer); document.removeEventListener("visibilitychange", schedule); media.removeEventListener("change", schedule); };
-  }, [leaves]);
+  }, [leaves, focus]);
 
-  return <div className="atmosphere" aria-hidden="true">{leaves && leaf && <span key={leaf.id} className={`falling-leaf leaf-${leaf.side}`} onAnimationEnd={() => setLeaf(null)} />}</div>;
+  return <div className="atmosphere" aria-hidden="true">{leaves && !focus && leaf && <span key={leaf.id} className={`falling-leaf leaf-${leaf.side}`} onAnimationEnd={() => setLeaf(null)} />}</div>;
 }
 
 export function AtmosphereControls() {

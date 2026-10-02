@@ -25,8 +25,13 @@ async (page) => {
   header.setUint32(24, 8000, true); header.setUint32(28, 8000, true); header.setUint16(32, 1, true);
   header.setUint16(34, 8, true); write("data", 36); header.setUint32(40, 65536, true); wav.fill(127, 44);
   const audioBody = [...wav].map((b) => String.fromCharCode(b)).join("");
+  let preferences = null;
   await page.route("**/api/**", async (route) => {
     const path = route.request().url().split("/api")[1];
+    if (path === "/reader/preferences") {
+      if (route.request().method() === "PATCH") preferences = { ...(preferences ?? {}), ...route.request().postDataJSON() };
+      return route.fulfill({ json: { preferences, updatedAt: null } });
+    }
     const json = (data) => route.fulfill({ json: data });
     if (path.endsWith("/tts/voices")) return json([{ id: "test-voice", provider: "edge", name: "Giọng kiểm thử", language: "vi" }, { id: "vieneu-thien-tam-duc", provider: "vieneu", name: "Thiền Tâm Đức", language: "vi" }]);
     if (path.includes("/tts/chunks/")) return json([{ chunkIndex: 0, text: "Tiếng Việt", startCharacter: 0, endCharacter: 10 }]);
