@@ -54,7 +54,7 @@ async (page) => {
   });
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("http://localhost:3000/reader/upgrade-test/first");
-  await page.getByRole("button", { name: "▶ Đọc", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Đọc", exact: true }).waitFor();
   await page.waitForFunction(() => getComputedStyle(document.querySelector(".reader-text")).fontSize === "24px");
   await page.waitForTimeout(1100);
   assert(await page.locator(".reader-text").textContent() === text, "UTF-16 source text, emoji and CRLF must be preserved");
@@ -70,7 +70,7 @@ async (page) => {
   }, position);
   assert(Math.abs(await charTop()) < 45, "Existing progress must restore the correct paragraph");
   assert(writes.length === 0 && audioRequests === 0, "Restoration must not save progress or create audio");
-  await page.locator(".player-settings summary").click();
+  await page.getByRole("button", { name: "Tùy chỉnh chữ và không gian", exact: true }).first().click();
   await page.getByLabel("Font chữ", { exact: true }).selectOption("serif");
   await page.getByLabel("Cỡ chữ", { exact: true }).fill("26");
   await page.getByLabel("Giãn dòng", { exact: true }).fill("2");
@@ -83,7 +83,7 @@ async (page) => {
   assert(Math.abs(await charTop()) < 60, "Resize must preserve the visible paragraph");
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Mobile must not overflow");
   assert(writes.length === 0, "Resize must not write progress");
-  await page.locator(".player-settings summary").click();
+  await page.getByRole("button", { name: "Tùy chỉnh chữ và không gian", exact: true }).first().click();
   await page.waitForTimeout(1000);
   await page.evaluate(() => {
     window.dispatchEvent(new WheelEvent("wheel", { deltaY: 1000 }));
@@ -97,7 +97,7 @@ async (page) => {
   await page.locator(".reader-text").dispatchEvent("click", { detail: 2 });
   await page.waitForTimeout(300);
   assert(await page.locator(".reader-focus").count() === 0, "Double click for selection must not toggle focus");
-  await page.getByRole("button", { name: "▶ Đọc", exact: true }).click();
+  await page.getByRole("button", { name: "Đọc", exact: true }).click();
   await page.waitForFunction(() => !document.querySelector("audio").paused);
   await page.evaluate(() => { window.__heldAudio = document.querySelector("audio"); document.activeElement.blur(); });
   await page.keyboard.press("f");
@@ -121,19 +121,19 @@ async (page) => {
   await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
   await page.keyboard.press("ArrowRight");
   await page.waitForURL("**/next");
-  await page.getByRole("button", { name: "▶ Đọc", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Đọc", exact: true }).waitFor();
   assert(nextReads === 1, "Opening prefetched chapter must reuse query cache");
 
   // Two isolated browser contexts represent two devices sharing the mock API.
-  const secondContext = await page.context().browser().newContext();
+  const secondContext = await page.context().browser().newContext({ serviceWorkers: "block" });
   const second = await secondContext.newPage();
   try {
     await attach(second);
     await second.goto("http://localhost:3000/reader/upgrade-test/next");
-    await second.getByRole("button", { name: "▶ Đọc", exact: true }).waitFor();
-    await second.locator(".player-settings summary").click();
+    await second.getByRole("button", { name: "Đọc", exact: true }).waitFor();
+    await second.getByRole("button", { name: "Tùy chỉnh chữ và không gian", exact: true }).first().click();
     await second.waitForFunction(() => JSON.parse(localStorage.getItem("gac-sach-preferences")).state.fontSize === 26);
-    await page.locator(".player-settings summary").click();
+    await page.getByRole("button", { name: "Tùy chỉnh chữ và không gian", exact: true }).first().click();
     await page.getByLabel("Font chữ", { exact: true }).selectOption("sans");
     await second.getByRole("button", { name: "Biển", exact: true }).click();
     await page.waitForTimeout(900);
@@ -146,7 +146,7 @@ async (page) => {
     await page.waitForTimeout(800);
     assert(await page.evaluate(() => JSON.parse(localStorage.getItem("gac-sach-preferences")).state.pending.fontSize === 28), "Offline changes must remain queued locally");
     await page.reload();
-    await page.getByRole("button", { name: "▶ Đọc", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Đọc", exact: true }).waitFor();
     assert(await page.evaluate(() => JSON.parse(localStorage.getItem("gac-sach-preferences")).state.fontSize === 28), "Offline reload must retain changed font size");
     offline = false;
     await page.evaluate(() => window.dispatchEvent(new Event("online")));

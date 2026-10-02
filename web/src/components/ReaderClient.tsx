@@ -2,9 +2,11 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createBookmark, deleteBookmark, getBook, getBookmarks, getChapter, getProgress, saveProgress, TtsChunk, type ReadingProgress } from "../lib/api";
+import { Icon } from "./Icon";
+import { AtmosphereControls } from "./ReadingAtmosphere";
 import { TtsPlayer } from "./TtsPlayer";
 import { readingThemes, useReadingPreferences, useReaderSession } from "../lib/reading-preferences";
 import { characterRange, scrollToCharacter, visibleCharacter } from "../lib/reader-position";
@@ -38,16 +40,21 @@ function chapterParagraphs(text: string, chunk: TtsChunk | null) {
 
 export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const bookmarkTarget = searchParams.get("position");
+  const settingsRef = useRef<HTMLDivElement | null>(null);
+  const [drawerView, setDrawerView] = useState<"chapters" | "bookmarks">("chapters");
   const reading = useTtsSession((state) => state.running);
   const { focus } = useReaderSession();
   const preferences = useReadingPreferences();
   const { theme, font, fontSize, lineHeight, columnWidth, ready, syncStatus } = preferences;
   const queryClient = useQueryClient();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const clickTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [bookmarkResume, setBookmarkResume] = useState<{ chapterId: string; position: number } | null>(null);
   const [ttsChunk, setTtsChunk] = useState<TtsChunk | null>(null);
   const [viewPosition, setViewPosition] = useState(0);
   const [followReading, setFollowReading] = useState(true);
+  const [showHint, setShowHint] = useState(false);
   const [chapterSearch, setChapterSearch] = useState("");
   const textContainerRef = useRef<HTMLDivElement | null>(null);
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
@@ -116,13 +123,14 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
     if (chapterText === undefined || !ready || progressQuery.isLoading || restored.current === chapterId) return;
     const frame = requestAnimationFrame(() => {
       restored.current = chapterId;
-      const position = progressQuery.data?.chapterId === chapterId ? Math.min(chapterText.length, progressQuery.data.characterPosition) : 0;
+      const requested = bookmarkTarget !== null ? Number(bookmarkTarget) : NaN;
+      const position = Number.isInteger(requested) && requested >= 0 ? Math.min(chapterText.length, requested) : progressQuery.data?.chapterId === chapterId ? Math.min(chapterText.length, progressQuery.data.characterPosition) : 0;
       anchor.current = { position, gap: 0, atTop: position === 0 };
       if (anchor.current.position) restoreView();
       else { suppressSave(); window.scrollTo({ top: 0, behavior: "instant" }); rememberView(); }
     });
     return () => cancelAnimationFrame(frame);
-  }, [chapterId, chapterText, ready, progressQuery.isLoading, progressQuery.data, rememberView, restoreView, suppressSave]);
+  }, [chapterId, chapterText, ready, progressQuery.isLoading, progressQuery.data, bookmarkTarget, rememberView, restoreView, suppressSave]);
 
   useEffect(() => {
     if (!chapterText) return;
@@ -179,7 +187,7 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
     const frame = requestAnimationFrame(restoreView);
     return () => cancelAnimationFrame(frame);
   }, [focus, restoreView]);
-  useEffect(() => () => { clearTimeout(clickTimer.current); useReaderSession.setState({ focus: false }); }, []);
+  useEffect(() => () => { useReaderSession.setState({ focus: false }); }, []);
 
   useEffect(() => {
     if (!ttsChunk || !followReadingRef.current) return;
@@ -204,10 +212,25 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
   }, [bookId, chapterText, nextChapter, queryClient, ttsChunk, viewPosition]);
 
   function openToc(trigger?: HTMLElement) {
+    setDrawerView("chapters");
     tocTrigger.current = trigger ?? document.activeElement as HTMLElement;
     dialogRef.current?.showModal();
   }
-  function toggleFocus() { clearTimeout(clickTimer.current); rememberView(); suppressSave(); useReaderSession.setState({ focus: !useReaderSession.getState().focus }); }
+  useEffect(() => { const timer = setTimeout(() => setShowHint(!localStorage.getItem("gac-sach-focus-hint")), 0); return () => clearTimeout(timer); }, []);
+  function toggleFocus() { localStorage.setItem("gac-sach-focus-hint", "seen"); setShowHint(false); rememberView(); suppressSave(); useReaderSession.setState({ focus: !useReaderSession.getState().focus }); }
+  function jumpBookmark(targetChapter: string, position: number) {
+    dialogRef.current?.close(); stopReading(); suppressSave();
+    setBookmarkResume({ chapterId: targetChapter, position });
+    if (targetChapter === chapterId) {
+      followReadingRef.current = false; setFollowReading(false); setTtsChunk(null);
+      anchor.current = { position: Math.min(chapterText?.length ?? 0, position), gap: 0, atTop: position === 0 };
+      restoreView();
+    } else {
+      restored.current = "";
+      router.push(`/reader/${bookId}/${targetChapter}?position=${position}`);
+    }
+  }
+  useEffect(() => { if (!chapterQuery.data || !bookQuery.data) return; const timer = setTimeout(() => { document.title = `${chapterQuery.data.title} · ${bookQuery.data.title} · Gác Sách`; }, 0); return () => clearTimeout(timer); }, [chapterQuery.data, bookQuery.data]);
   function stopReading() { useTtsSession.setState({ running: false, speechPlaying: false, autoplayChapterId: "" }); }
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -239,7 +262,7 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
   const remainingMinutes = Math.ceil((chapterText?.slice(viewPosition).trim().split(/\s+/).filter(Boolean).length ?? 0) / 200);
   const settings = <div className="reader-settings">
     <span className="text-muted">Giao diện</span><div className="theme-options" role="group" aria-label="Theme giao diện">{readingThemes.map((option) => <button className="theme-option" aria-pressed={theme === option.id} key={option.id} onClick={() => useReadingPreferences.setState({ theme: option.id })}><span className="theme-swatch" aria-hidden="true" style={{ backgroundColor: option.color }} />{option.name}</button>)}</div>
-    <label>Font chữ <select aria-label="Font chữ" value={font} onChange={(e) => useReadingPreferences.setState({ font: e.target.value as "sans" | "serif" })}><option value="sans">Sans · Arial</option><option value="serif">Serif · Georgia</option></select></label>
+    <label>Font chữ <select aria-label="Font chữ" value={font} onChange={(e) => useReadingPreferences.setState({ font: e.target.value as "sans" | "serif" })}><option value="sans">Sans · Arial</option><option value="serif">Serif · Source Serif 4</option></select></label>
     <label>Cỡ chữ <input aria-label="Cỡ chữ" type="range" min="16" max="28" step="1" value={fontSize} onChange={(e) => useReadingPreferences.setState({ fontSize: Number(e.target.value) })} /> {fontSize}px</label>
     <label>Giãn dòng <input aria-label="Giãn dòng" type="range" min="1.5" max="2.2" step="0.1" value={lineHeight} onChange={(e) => useReadingPreferences.setState({ lineHeight: Number(e.target.value) })} /> {lineHeight}</label>
     <label>Độ rộng dòng <select aria-label="Độ rộng dòng" value={columnWidth} onChange={(e) => useReadingPreferences.setState({ columnWidth: Number(e.target.value) as 60 | 68 | 75 })}>{[60,68,75].map((width) => <option key={width} value={width}>{width} ký tự</option>)}</select></label>
@@ -248,30 +271,35 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
 
   if (bookQuery.isLoading || chapterQuery.isLoading) return <main className="reading-surface min-h-screen p-8" aria-busy="true"><p className="subtle">Đang mở chương…</p><div className="reader-skeleton mx-auto max-w-2xl" aria-hidden="true">{[1,2,3,4,5].map((line) => <div key={line} />)}</div>{reading && <button className="primary-button" onClick={stopReading}>■ Dừng</button>}</main>;
   if (bookQuery.isError || chapterQuery.isError || !bookQuery.data || !chapterQuery.data) return <main className="reading-surface grid min-h-screen place-items-center"><div><Link href="/library">Không tìm thấy chương. Về thư viện</Link>{reading && <button className="primary-button ml-3" onClick={stopReading}>■ Dừng</button>}</div></main>;
-  const bookmarkPosition = ttsChunk?.startCharacter ?? viewPosition;
+  const bookmarkPosition = viewPosition;
+  const bookPercent = chapters.length ? Math.round((Math.max(0, chapterIndex) + percent / 100) / chapters.length * 100) : 0;
   const fold = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g,"d").replace(/Đ/g,"D").toLowerCase();
   return <main className={`min-h-screen reading-surface reader-page ${focus ? "reader-focus" : ""}`}>
-    <header className="site-header sticky top-0 z-20 reader-header"><Link className="wordmark" href={`/library/${bookId}`}>Gác Sách</Link><div className="flex items-center gap-3"><button onClick={(e) => openToc(e.currentTarget)}>Mục lục</button><button onClick={toggleFocus}>Tập trung</button></div></header>
+    <header className="site-header sticky top-0 z-20 reader-header"><Link className="wordmark" href={`/library/${bookId}`}>Gác Sách</Link><div className="flex items-center gap-3"><button onClick={(e) => openToc(e.currentTarget)}>Mục lục</button><button aria-label="Tùy chỉnh chữ và không gian" popoverTarget="reader-preferences">Aa</button><button onClick={toggleFocus}>Tập trung</button></div></header>
     <div className="chapter-progress" role="progressbar" aria-label="Tiến độ chương" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><span style={{ width: `${percent}%` }} /></div>
-    <article className="reader-column px-6 py-8 md:px-8" style={{ maxWidth: `calc(${columnWidth}ch + 4rem)`, fontSize, fontFamily: font === "serif" ? "Georgia, 'Times New Roman', serif" : "Arial, Helvetica, sans-serif" }}>
+    <article className="reader-column px-6 py-8 md:px-8" style={{ maxWidth: `calc(${columnWidth}ch + 4rem)`, fontSize, fontFamily: font === "serif" ? "var(--font-reader-serif), Georgia, serif" : "Arial, Helvetica, sans-serif" }}>
       <div className="reader-title"><p className="text-sm text-muted">{bookQuery.data.author}</p><h1 className="mt-2 text-3xl font-semibold md:text-4xl">{chapterQuery.data.title}</h1></div>
-      <div ref={playerContainerRef} className="sticky top-16 z-10 mt-5 rounded-xl reader-dock reading-surface"><TtsPlayer onLayoutChange={() => { if (Date.now() > autoUntil.current) rememberView(); suppressSave(); }} readerSettings={settings} key={chapterId} chapterId={chapterId} initialPosition={progressQuery.isLoading ? undefined : progressQuery.data?.chapterId === chapterId ? progressQuery.data.characterPosition : 0} onProgress={handleTtsProgress} onChunkChange={handleTtsChunk} onComplete={() => {
+      <div ref={playerContainerRef} className="sticky top-16 z-10 mt-5 rounded-xl reader-dock reading-surface"><TtsPlayer onLayoutChange={() => { if (Date.now() > autoUntil.current) rememberView(); suppressSave(); }} key={`${chapterId}-${bookmarkResume?.chapterId === chapterId ? bookmarkResume.position : "default"}`} chapterId={chapterId} initialPosition={progressQuery.isLoading ? undefined : bookmarkResume?.chapterId === chapterId ? bookmarkResume.position : bookmarkTarget !== null && Number.isInteger(Number(bookmarkTarget)) && Number(bookmarkTarget) >= 0 ? Number(bookmarkTarget) : progressQuery.data?.chapterId === chapterId ? progressQuery.data.characterPosition : 0} onProgress={handleTtsProgress} onChunkChange={handleTtsChunk} onComplete={() => {
         if (!useTtsSession.getState().running) return;
         if (nextChapter) selectChapter(nextChapter.id, true);
         else stopReading();
       }} /></div>
-      <div className="reader-tools mt-4 flex flex-wrap items-center gap-3 text-sm"><button disabled={bookmarkMutation.isPending} onClick={() => bookmarkMutation.mutate(bookmarkPosition)}>🔖 Lưu dấu trang</button><button aria-pressed={followReading} onClick={() => { followReadingRef.current = !followReading; setFollowReading(!followReading); }}>{followReading ? "👁 Bám theo đoạn đọc" : "👁‍🗨 Đã dừng bám theo"}</button><span className="text-muted">{bookmarksQuery.data?.length ?? 0} dấu trang</span></div>
-      <p className="reader-estimate subtle mt-4">{percent}% chương · Còn khoảng {remainingMinutes} phút đọc</p>
-      <div ref={textContainerRef} className="reader-text mt-8 whitespace-pre-line" style={{ fontFamily: "inherit", lineHeight }} onClick={(event) => {
-        clearTimeout(clickTimer.current);
-        if (window.getSelection()?.toString() || event.detail !== 1) return;
-        clickTimer.current = setTimeout(() => { if (!window.getSelection()?.toString()) toggleFocus(); }, 250);
-      }}>{chapterParagraphs(chapterQuery.data.plainText, ttsChunk)}</div>
-      {bookmarksQuery.data && bookmarksQuery.data.length > 0 && <ul className="reader-tools mt-8 space-y-2 border-t border-current/10 pt-4 text-sm">{bookmarksQuery.data.slice(0,8).map((bookmark) => <li className="flex items-center justify-between gap-2" key={bookmark.id}><span>Vị trí {bookmark.characterPosition}</span><button onClick={() => removeBookmark.mutate(bookmark.id)}>Xóa</button></li>)}</ul>}
+      <div className="reader-tools mt-4 flex flex-wrap items-center gap-3 text-sm"><button disabled={bookmarkMutation.isPending} onClick={() => bookmarkMutation.mutate(bookmarkPosition)}><Icon name="bookmark" /> Lưu dấu trang</button><button aria-pressed={followReading} onClick={() => { followReadingRef.current = !followReading; setFollowReading(!followReading); }}><Icon name="eye" />{followReading ? "Bám theo đoạn đọc" : "Đã dừng bám theo"}</button><button onClick={(e) => { openToc(e.currentTarget); setDrawerView("bookmarks"); }}>{bookmarksQuery.data?.length ?? 0} dấu trang</button></div>
+      {bookmarkMutation.isError && <p className="error-message" role="alert">Không lưu được dấu trang.</p>}
+      {showHint && <p className="reader-tools subtle mt-3">Dùng nút Tập trung hoặc phím F để ẩn điều khiển. Chạm vào chữ vẫn chọn văn bản bình thường. <button aria-label="Ẩn gợi ý tập trung" onClick={() => { localStorage.setItem("gac-sach-focus-hint", "seen"); setShowHint(false); }}>Đã hiểu</button></p>}
+      <p className="reader-estimate subtle mt-4">{percent}% chương · {bookPercent}% cả sách · Còn khoảng {remainingMinutes} phút đọc</p>
+      <div ref={textContainerRef} className="reader-text mt-8 whitespace-pre-line" style={{ fontFamily: "inherit", lineHeight }}>{chapterParagraphs(chapterQuery.data.plainText, ttsChunk)}</div>
       <footer className="reader-tools mt-14 flex justify-between border-t border-current/10 pb-40 pt-5 text-sm"><button disabled={!previousChapter} onClick={() => previousChapter && selectChapter(previousChapter.id)}>← Chương trước</button><button disabled={!nextChapter} onClick={() => nextChapter && selectChapter(nextChapter.id)}>Chương sau →</button></footer>
     </article>
-    <nav className="mobile-reader-bar" aria-label="Điều khiển đọc"><button onClick={(e) => openToc(e.currentTarget)}>Mục lục</button><button onClick={toggleFocus}>{focus ? "Thoát tập trung" : "Tập trung"}</button>{reading && <button onClick={stopReading}>Dừng đọc</button>}</nav>
+    <nav className="mobile-reader-bar" aria-label="Điều khiển đọc"><button onClick={(e) => openToc(e.currentTarget)}>Mục lục</button><button aria-label="Tùy chỉnh chữ và không gian" popoverTarget="reader-preferences">Aa</button><button onClick={toggleFocus}>{focus ? "Thoát tập trung" : "Tập trung"}</button>{reading && <button onClick={stopReading}>Dừng đọc</button>}</nav>
     {focus && <div className="focus-controls"><button onClick={toggleFocus}>Thoát tập trung</button>{reading && <button onClick={stopReading}>Dừng đọc</button>}</div>}
-    <dialog ref={dialogRef} className="chapter-drawer" aria-labelledby="toc-title" onClose={() => tocTrigger.current?.focus()}><div className="drawer-header"><h2 id="toc-title">Mục lục</h2><button aria-label="Đóng mục lục" onClick={() => dialogRef.current?.close()}>Đóng</button></div><p className="subtle">{bookQuery.data.title}</p><label className="block mt-5">Tìm chương<input className="chapter-search" aria-label="Tìm chương" value={chapterSearch} onChange={(e) => setChapterSearch(e.target.value)} /></label><ol className="chapter-list">{chapters.filter((chapter) => fold(chapter.title).includes(fold(chapterSearch))).map((chapter) => <li key={chapter.id}><button aria-current={chapter.id === chapterId ? "page" : undefined} onClick={() => selectChapter(chapter.id)}><span>{chapter.chapterNumber}. {chapter.title}</span><span className="subtle">{chapter.id === progressQuery.data?.chapterId ? "Đọc tới đây" : chapter.id === chapterId ? "Đang mở" : ""}</span></button></li>)}</ol></dialog>
+    <div id="reader-preferences" ref={settingsRef} popover="auto" className="reader-settings-popover" aria-label="Tùy chỉnh chữ và không gian"><div className="drawer-header"><h2>Chữ & không gian</h2><button autoFocus aria-label="Đóng tùy chỉnh" onClick={() => settingsRef.current?.hidePopover()}><Icon name="close" /></button></div>{settings}<AtmosphereControls /></div>
+    <dialog ref={dialogRef} className="chapter-drawer" aria-labelledby="toc-title" onClose={() => tocTrigger.current?.focus()}><div className="drawer-header"><h2 id="toc-title">Mục lục & dấu trang</h2><button aria-label="Đóng mục lục" onClick={() => dialogRef.current?.close()}>Đóng</button></div><p className="subtle">{bookQuery.data.title}</p><div className="drawer-switch" role="group" aria-label="Nội dung điều hướng"><button aria-pressed={drawerView === "chapters"} onClick={() => setDrawerView("chapters")}>Chương</button><button aria-pressed={drawerView === "bookmarks"} onClick={() => setDrawerView("bookmarks")}>Dấu trang ({bookmarksQuery.data?.length ?? 0})</button></div>{drawerView === "chapters" ? <><label className="block mt-5">Tìm chương<input className="chapter-search" aria-label="Tìm chương" value={chapterSearch} onChange={(e) => setChapterSearch(e.target.value)} /></label><ol className="chapter-list">{chapters.filter((chapter) => fold(chapter.title).includes(fold(chapterSearch))).map((chapter) => <li key={chapter.id}><button aria-current={chapter.id === chapterId ? "page" : undefined} onClick={() => selectChapter(chapter.id)}><span>{chapter.chapterNumber}. {chapter.title}</span><span className="subtle">{chapter.id === progressQuery.data?.chapterId ? "Đọc tới đây" : chapter.id === chapterId ? "Đang mở" : ""}</span></button></li>)}</ol></> : <div className="bookmark-list">
+      {bookmarksQuery.isLoading && <p role="status">Đang tải dấu trang…</p>}
+      {bookmarksQuery.isError && <p className="error-message" role="alert">Không tải được dấu trang.</p>}
+      {bookmarksQuery.data?.length === 0 && <p className="subtle">Lưu dấu trang để trở lại đoạn yêu thích.</p>}
+      {bookmarksQuery.data?.map((bookmark) => <div key={bookmark.id}><button className="bookmark-jump" onClick={() => jumpBookmark(bookmark.chapterId, bookmark.characterPosition)}><strong>{bookmark.chapterTitle || chapters.find((chapter) => chapter.id === bookmark.chapterId)?.title || "Chương đã lưu"}</strong><span>{bookmark.excerpt || (bookmark.chapterId === chapterId ? chapterText?.slice(Math.max(0, bookmark.characterPosition-20), bookmark.characterPosition+40).trim() : "Mở đoạn đã đánh dấu")}</span>{bookmark.note && <small>{bookmark.note}</small>}</button><button aria-label={`Xóa dấu trang ${bookmark.chapterTitle || bookmark.id}`} disabled={removeBookmark.isPending} onClick={() => removeBookmark.mutate(bookmark.id)}>Xóa</button></div>)}
+      {removeBookmark.isError && <p className="error-message" role="alert">Không xóa được dấu trang.</p>}
+    </div>}</dialog>
   </main>;
 }

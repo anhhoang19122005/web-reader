@@ -352,6 +352,10 @@ func (a *App) generateTTS(w http.ResponseWriter, r *http.Request) *apiError {
 	if synthesisErr != nil {
 		return synthesisErr
 	}
+	// A long synthesis may finish after the book was deleted.
+	if owned := a.ownedBook(r.Context(), chapter.BookID); owned != nil {
+		return owned
+	}
 	audioID := uuid.New()
 	storageKey := "tts/" + audioID.String() + map[bool]string{true: ".wav", false: ".mp3"}[mimeType == "audio/wav"]
 	if err := a.store.Put(r.Context(), storageKey, audio, mimeType); err != nil {

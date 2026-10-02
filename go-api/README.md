@@ -206,3 +206,30 @@ playwright-cli run-code --filename web/tests/reader-upgrades.js
 ```
 
 `READER_INTEGRATION_TEST=true go test ./...` kiểm tra MongoDB bằng sách UUID thử riêng và database tùy chỉnh `rpt_<UUID>` riêng, tự dọn dữ liệu thử. Không sửa tùy chỉnh hoặc tiến độ sách thật. Sau cập nhật backend dùng `pwsh -File .\start-reader-home.ps1 -Restart -Publish` để khởi động lại API quản lý và cập nhật web.
+
+### Bìa, dấu trang và hoàn tác xóa
+
+- `GET /api/books/{id}/cover`: bìa đã trích từ EPUB, trả PNG/JPEG/WebP/GIF được nhận dạng bằng nội dung; không phục vụ SVG/HTML trong origin ứng dụng. Quyền truy cập giống sách.
+- `GET/POST /api/reader/bookmarks/{bookId}` bổ sung `excerpt` (tối đa khoảng 60 ký tự Unicode) và `chapterTitle`; vị trí vẫn UTF-16. Backend tạo trích đoạn, không tin nội dung gửi từ client. Dấu trang cũ được bổ sung ngữ cảnh khi đọc, không migration/reset.
+- `DELETE /api/books/{id}` đánh dấu `deletedAt`, không xóa ngay tiến độ/chương/audio. Sách ẩn khỏi các endpoint đọc và thư viện.
+- `POST /api/books/{id}/restore` bỏ mốc xóa trong 30 giây; quá hạn trả `410 UNDO_EXPIRED`. Web hiện Hoàn tác trong 15 giây.
+- API local dọn sách quá hạn mỗi phút. Thư viện cũng thử dọn với thời hạn 1 giây cho môi trường serverless; lỗi dọn được log và thử lại. Storage/chương/audio/progress/bookmark được dọn trước document sách.
+- Tóm tắt sách bổ sung `continueChapterId`, `continueChapterNumber`, `continueChapterTitle`. Phần trăm giữ cách chia theo chương, tính vị trí trong chương bằng UTF-16.
+
+### PWA và kiểm tra frontend
+
+Web có `/manifest.webmanifest`, `/sw.js`, `/offline`; service worker chỉ đăng ký ở production. Chương đã mở được lưu ở CacheStorage trên thiết bị, không tự tải cả sách. Tiến độ offline được queue trong localStorage, gửi bằng PUT hiện có khi có mạng/focus; không thay schema tiến độ.
+
+Các kiểm tra giao diện `web/tests/library-reader-polish.js`, `reader-upgrades.js`, `continuous-reading.js`, `reading-atmosphere.js` phải chạy với Playwright context `serviceWorkers: "block"` và API mock. Kiểm tra PWA dùng server production riêng, tuyệt đối không trỏ tới API/sách thật:
+
+```powershell
+# Terminal 1, từ web/
+node tests/pwa-fixture.mjs
+# Terminal 2, từ web/, build production đã có sẵn
+node tests/pwa-server.mjs .next
+# Terminal 3, từ repo root
+playwright-cli open about:blank
+playwright-cli run-code --filename web/tests/pwa-offline.js
+```
+
+`theme-before-hydration.js` chặn JS bundle để kiểm tra theme trước React. Go: `go test ./...`, `go vet ./...`; bật `READER_INTEGRATION_TEST=true` để chạy riêng `TestBookExtrasMongoIntegration` trên database test tạm. Không chạy thử upload/xóa/ghi tiến độ bằng sách thật.

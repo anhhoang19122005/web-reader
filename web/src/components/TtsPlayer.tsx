@@ -1,8 +1,8 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AtmosphereControls } from "./ReadingAtmosphere";
+import { useEffect, useRef, useState } from "react";
+import { Icon } from "./Icon";
 import { apiUrl, generateTts, getTtsChunks, getTtsVoices, type TtsChunk, type TtsGenerateResponse } from "../lib/api";
 import { useTtsSession } from "../lib/tts-session";
 import { audioPosition, resumePoint } from "../lib/tts-progress";
@@ -17,7 +17,7 @@ function ttsAudioKey(payload: TtsPayload, chunkText: string, provider: string) {
   return ["tts-audio", payload.chapterId, payload.chunkIndex, chunkText, provider, payload.voiceId, payload.speakingRate, payload.pitch, payload.volume] as const;
 }
 
-export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChange, onComplete, readerSettings, onLayoutChange }: { chapterId: string; initialPosition: number | undefined; onProgress: (position: number) => void; onChunkChange: (chunk: TtsChunk | null, info?: { auto: boolean }) => void; onComplete?: () => void; readerSettings?: ReactNode; onLayoutChange?: () => void }) {
+export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChange, onComplete, onLayoutChange }: { chapterId: string; initialPosition: number | undefined; onProgress: (position: number) => void; onChunkChange: (chunk: TtsChunk | null, info?: { auto: boolean }) => void; onComplete?: () => void; onLayoutChange?: () => void }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [chunkIndex, setChunkIndex] = useState(-1);
   const pendingSeek = useRef<number | null>(null);
@@ -290,13 +290,13 @@ export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChang
   if (voices.isLoading || chunks.isLoading || initialPosition === undefined) return <div className="rounded-xl border border-current/10 p-4 font-sans text-sm opacity-70">Đang tải giọng đọc…</div>;
   if (voices.isError || chunks.isError || !voices.data?.length || !chunks.data?.length) return <div className="rounded-xl border border-current/10 p-4 font-sans text-sm opacity-70">Chưa có giọng đọc khả dụng.</div>;
 
-  return <div className="tts-player font-sans text-sm">
+  return <div className={`tts-player font-sans text-sm ${chunkIndex < 0 && !running ? "player-idle" : ""}`}>
     <div className="player-actions">
-      <button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={displayedIndex === 0} aria-label="Đoạn trước" onClick={playPrevious}>←</button><button className="primary-button disabled:opacity-50" disabled={isGenerating} onClick={() => void play(displayedIndex)}>{isGenerating ? "Đang tạo…" : "▶ Đọc"}</button><button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={displayedIndex >= chunks.data.length - 1} aria-label="Đoạn sau" onClick={() => playNext()}>→</button>
-      <button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={!running} onClick={stop}>■ Dừng</button>
+      <button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={displayedIndex === 0} aria-label="Đoạn trước" onClick={playPrevious}><Icon name="left" /></button><button className="primary-button disabled:opacity-50" disabled={isGenerating} onClick={() => void play(displayedIndex)}>{isGenerating ? "Đang tạo…" : <><Icon name="play" /> Đọc</>}</button><button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={displayedIndex >= chunks.data.length - 1} aria-label="Đoạn sau" onClick={() => playNext()}><Icon name="right" /></button>
+      <button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={!running} onClick={stop}><Icon name="stop" /> Dừng</button>
       <span className="voice-caption">{selectedVoiceInfo?.name}</span>
     </div>
-    <details className="player-settings"><summary onClick={onLayoutChange}>Cài đặt đọc & không gian</summary><div className="settings-body"><div className="settings-grid">
+    <details className="player-settings"><summary onClick={onLayoutChange}>Giọng & tốc độ</summary><div className="settings-body"><div className="settings-grid">
       <select className="rounded-lg border border-current/20 bg-transparent px-2 py-2" aria-label="Nhà cung cấp giọng đọc" value={provider} onChange={(event) => { invalidateSetting(); setProvider(event.target.value); setVoiceId(""); }}><option value="all">Tất cả nhà cung cấp</option>{providers.map((value) => <option key={value} value={value}>{providerLabels[value] ?? value} ({allVoices.filter((voice) => voice.provider === value).length})</option>)}</select>
       <select className="rounded-lg border border-current/20 bg-transparent px-2 py-2" aria-label="Giọng đọc" value={selectedVoice} onChange={(event) => { invalidateSetting(); setVoiceId(event.target.value); }}>{providers.map((value) => { const grouped = visibleVoices.filter((voice) => voice.provider === value); return grouped.length ? <optgroup key={value} label={providerLabels[value] ?? value}>{grouped.map((voice) => <option key={voice.id} value={voice.id}>{voice.name}</option>)}</optgroup> : null; })}</select>
       <select className="rounded-lg border border-current/20 bg-transparent px-2 py-2" aria-label="Preset giọng" value={preset} onChange={(event) => applyPreset(event.target.value)}><option value="narrator">Narrator</option><option value="deep">Deep male</option><option value="soft">Soft female</option><option value="fantasy">Fantasy</option><option value="romance">Romance</option><option value="mystery">Mystery</option><option value="taothao">Tào Tháo</option></select>
@@ -304,7 +304,7 @@ export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChang
       <label className="flex items-center gap-1">Cao độ <input aria-label="Cao độ" type="range" min="-20" max="20" step="1" value={pitch} disabled={isFixedPitchProvider} title={selectedVoiceInfo?.provider === "saydi" ? "SaydiVoice chưa hỗ trợ cao độ" : selectedVoiceInfo?.provider === "local" ? "Giọng local offline chưa hỗ trợ cao độ" : undefined} onChange={(event) => { invalidateSetting(); setPitch(Number(event.target.value)); }} /> {isFixedPitchProvider ? "Không hỗ trợ" : pitch}</label>
       <label className="flex items-center gap-1">Âm lượng <input aria-label="Âm lượng" type="range" min="0" max="1" step="0.1" value={volume} onChange={(event) => { const next = Number(event.target.value); setVolume(next); if (audioRef.current) audioRef.current.volume = next; }} /> {Math.round(volume * 100)}%</label>
       <label className="flex items-center gap-1">Phát lại <select aria-label="Tốc độ phát lại" className="rounded-lg border border-current/20 bg-transparent px-2 py-1" value={playbackRate} onChange={(event) => { const value = Number(event.target.value); setPlaybackRate(value); if (audioRef.current) audioRef.current.playbackRate = value; }}><option value="0.75">0.75x</option><option value="1">1x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option></select></label>
-    </div>{readerSettings}<AtmosphereControls /></div></details>
+    </div><button className="settings-close" onClick={(event) => { onLayoutChange?.(); event.currentTarget.closest("details")?.removeAttribute("open"); }}>Đóng cài đặt giọng</button></div></details>
     {error && <p className="mt-3 text-sm error-message" role="alert">{error}</p>}
     {voices.data.length === 1 && voices.data[0].provider === "mock" && <p className="mt-3 text-xs opacity-60">Đang dùng voice demo. Chạy lại start-reader.ps1 để cài Edge-TTS miễn phí.</p>}
     <audio ref={audioRef} className="mt-3 w-full" controls onLoadedMetadata={restoreAudioPosition} onCanPlay={restoreAudioPosition} onPlay={(event) => { if (!event.currentTarget.paused) useTtsSession.setState({ running: true }); }} onPlaying={() => { useTtsSession.setState({ speechPlaying: true }); void prefetchNext(activeIndex.current).catch(() => undefined); }} onPause={() => useTtsSession.setState({ speechPlaying: false })} onWaiting={() => useTtsSession.setState({ speechPlaying: false })} onError={() => useTtsSession.setState({ speechPlaying: false })} onEnded={() => { useTtsSession.setState({ speechPlaying: false }); playNext(true); }} onVolumeChange={(event) => setVolume(event.currentTarget.volume)} />

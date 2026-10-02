@@ -27,6 +27,7 @@ type mongoBook struct {
 	OriginalFileStorageKey string         `bson:"originalFileStorageKey"`
 	FileType               string         `bson:"fileType"`
 	Language               string         `bson:"language"`
+	DeletedAt              *time.Time     `bson:"deletedAt,omitempty"`
 	CreatedAt              time.Time      `bson:"createdAt"`
 	ChapterCount           int            `bson:"chapterCount"`
 	Chapters               []mongoChapter `bson:"chapters,omitempty"` // legacy documents only
@@ -58,6 +59,8 @@ type mongoBookmark struct {
 	BookID            string    `bson:"bookId"`
 	ChapterID         string    `bson:"chapterId"`
 	CharacterPosition int       `bson:"characterPosition"`
+	Excerpt           string    `bson:"excerpt,omitempty"`
+	ChapterTitle      string    `bson:"chapterTitle,omitempty"`
 	Note              *string   `bson:"note,omitempty"`
 	CreatedAt         time.Time `bson:"createdAt"`
 }
@@ -86,7 +89,7 @@ func (a *App) collection(name string) *mongo.Collection {
 
 func (a *App) findBook(ctx context.Context, bookID uuid.UUID) (mongoBook, error) {
 	var book mongoBook
-	err := a.collection(booksCollection).FindOne(ctx, bson.M{"_id": bookID.String(), "userId": singleUserID}).Decode(&book)
+	err := a.collection(booksCollection).FindOne(ctx, bson.M{"_id": bookID.String(), "userId": singleUserID, "deletedAt": nil}).Decode(&book)
 	return book, err
 }
 
@@ -128,7 +131,7 @@ func (a *App) ownedChapterDocument(ctx context.Context, chapterID uuid.UUID) (mo
 	}
 	// Keep reads compatible with books created by the first Mongo version.
 	var book mongoBook
-	err = a.collection(booksCollection).FindOne(ctx, bson.M{"userId": singleUserID, "chapters.id": chapterID.String()}).Decode(&book)
+	err = a.collection(booksCollection).FindOne(ctx, bson.M{"userId": singleUserID, "deletedAt": nil, "chapters.id": chapterID.String()}).Decode(&book)
 	if err != nil {
 		return mongoBook{}, mongoChapter{}, err
 	}

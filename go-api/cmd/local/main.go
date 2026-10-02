@@ -23,6 +23,17 @@ func main() {
 			log.Fatal(err)
 		}
 	}
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			cleanup, done := context.WithTimeout(context.Background(), 30*time.Second)
+			if err := app.PurgeDeletedBooks(cleanup); err != nil {
+				log.Printf("Purge deleted books: %v", err)
+			}
+			done()
+		}
+	}()
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8081"

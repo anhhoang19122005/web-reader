@@ -24,6 +24,8 @@ type bookmark struct {
 	ChapterID         uuid.UUID `json:"chapterId"`
 	CharacterPosition int       `json:"characterPosition"`
 	Note              *string   `json:"note"`
+	Excerpt           string    `json:"excerpt"`
+	ChapterTitle      string    `json:"chapterTitle"`
 	CreatedAt         time.Time `json:"createdAt"`
 }
 
@@ -167,6 +169,7 @@ func (a *App) listBookmarks(w http.ResponseWriter, r *http.Request, bookID uuid.
 	}
 	defer cursor.Close(r.Context())
 	bookmarks := []bookmark{}
+	legacyChapters := map[string]mongoChapter{}
 	for cursor.Next(r.Context()) {
 		var document mongoBookmark
 		if err := cursor.Decode(&document); err != nil {
@@ -180,7 +183,21 @@ func (a *App) listBookmarks(w http.ResponseWriter, r *http.Request, bookID uuid.
 			}
 			return databaseError(chapterErr)
 		}
-		bookmarks = append(bookmarks, bookmark{ID: bookmarkID, ChapterID: chapterID, CharacterPosition: document.CharacterPosition, Note: document.Note, CreatedAt: document.CreatedAt})
+		if document.Excerpt == "" {
+			chapter, loaded := legacyChapters[document.ChapterID]
+			var chapterErr error
+			if !loaded {
+				_, chapter, chapterErr = a.findChapter(r.Context(), bookID, chapterID)
+				if chapterErr == nil {
+					legacyChapters[document.ChapterID] = chapter
+				}
+			}
+			if chapterErr == nil {
+				document.Excerpt = bookmarkExcerpt(chapter.PlainText, document.CharacterPosition)
+				document.ChapterTitle = chapter.Title
+			}
+		}
+		bookmarks = append(bookmarks, bookmark{ID: bookmarkID, ChapterID: chapterID, CharacterPosition: document.CharacterPosition, Note: document.Note, Excerpt: document.Excerpt, ChapterTitle: document.ChapterTitle, CreatedAt: document.CreatedAt})
 	}
 	if err := cursor.Err(); err != nil {
 		return databaseError(err)
@@ -198,12 +215,16 @@ func (a *App) createBookmark(w http.ResponseWriter, r *http.Request, bookID uuid
 	if decodeErr := decodeJSON(r, &request); decodeErr != nil || request.ChapterID == uuid.Nil || request.CharacterPosition < 0 || (request.Note != nil && len([]rune(*request.Note)) > 1000) {
 		return newAPIError(http.StatusBadRequest, "VALIDATION_ERROR", "Dữ liệu không hợp lệ.")
 	}
-	if chapterErr := a.ensureChapter(r.Context(), bookID, request.ChapterID); chapterErr != nil {
-		return chapterErr
+	_, chapter, chapterErr := a.findChapter(r.Context(), bookID, request.ChapterID)
+	if chapterErr != nil {
+		return newAPIError(404, "CHAPTER_NOT_FOUND", "Không tìm thấy chương.")
+	}
+	if request.CharacterPosition > utf16Length([]rune(chapter.PlainText)) {
+		return newAPIError(400, "VALIDATION_ERROR", "Vị trí vượt quá nội dung chương.")
 	}
 	createdAt := time.Now().UTC()
-	value := bookmark{ID: uuid.New(), ChapterID: request.ChapterID, CharacterPosition: request.CharacterPosition, Note: request.Note, CreatedAt: createdAt}
-	document := mongoBookmark{ID: value.ID.String(), UserID: singleUserID, BookID: bookID.String(), ChapterID: value.ChapterID.String(), CharacterPosition: value.CharacterPosition, Note: value.Note, CreatedAt: value.CreatedAt}
+	value := bookmark{ID: uuid.New(), ChapterID: request.ChapterID, CharacterPosition: request.CharacterPosition, Note: request.Note, Excerpt: bookmarkExcerpt(chapter.PlainText, request.CharacterPosition), ChapterTitle: chapter.Title, CreatedAt: createdAt}
+	document := mongoBookmark{ID: value.ID.String(), UserID: singleUserID, BookID: bookID.String(), ChapterID: value.ChapterID.String(), CharacterPosition: value.CharacterPosition, Note: value.Note, Excerpt: value.Excerpt, ChapterTitle: value.ChapterTitle, CreatedAt: value.CreatedAt}
 	if _, err := a.collection(bookmarkCollection).InsertOne(r.Context(), document); err != nil {
 		return databaseError(err)
 	}

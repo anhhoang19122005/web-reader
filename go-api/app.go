@@ -165,7 +165,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		err = a.listBooks(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(path, "/books/"):
 		err = a.bookRoute(w, r, path)
-	case r.Method == http.MethodDelete && strings.HasPrefix(path, "/books/"):
+	case (r.Method == http.MethodDelete || r.Method == http.MethodPost) && strings.HasPrefix(path, "/books/"):
 		err = a.bookRoute(w, r, path)
 	case r.Method == http.MethodGet && strings.HasPrefix(path, "/reader/progress/"):
 		err = a.getProgress(w, r, path)

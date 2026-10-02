@@ -9,6 +9,7 @@ export type BookSummary = {
   createdAt: string;
   progressPercent: number;
   lastReadAt: string | null;
+  continueChapterId?: string | null; continueChapterNumber?: number; continueChapterTitle?: string;
 };
 
 export type Book = {
@@ -42,7 +43,7 @@ export type ReadingProgress = {
 export type TtsVoice = { id: string; provider: string; name: string; language: string; gender: string; style: string };
 export type TtsChunk = { chunkIndex: number; text: string; startCharacter: number; endCharacter: number };
 export type TtsGenerateResponse = { audioUrl: string; mimeType: string; durationMs: number; chunkIndex: number; startCharacter: number; endCharacter: number; cached: boolean };
-export type Bookmark = { id: string; chapterId: string; characterPosition: number; note: string | null; createdAt: string };
+export type Bookmark = { id: string; chapterId: string; characterPosition: number; note: string | null; excerpt?: string; chapterTitle?: string; createdAt: string };
 
 type ApiError = { message?: string };
 
@@ -56,6 +57,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(error.message ?? "Không thể kết nối tới thư viện.");
   }
   if (response.status === 204) return undefined as T;
+  if ((!init?.method || init.method === "GET") && /^\/books(?:\/[^/]+(?:\/chapters\/[^/]+)?)?$/.test(path) && typeof window !== "undefined" && "caches" in window) {
+    const copy = response.clone();
+    void (async () => {
+      try {
+        const cache = await caches.open("gac-sach-content-v1");
+        const key = `/api${path}`;
+        await cache.delete(key); await cache.put(key, copy);
+        const keys = await cache.keys();
+        for (const old of keys.slice(0, Math.max(0, keys.length - 40))) await cache.delete(old);
+      } catch { /* Reading continues if browser storage is full/unavailable. */ }
+    })();
+  }
   return response.json() as Promise<T>;
 }
 
@@ -71,7 +84,10 @@ export const saveProgress = (bookId: string, chapterId: string, characterPositio
   body: JSON.stringify({ chapterId, characterPosition }),
 });
 
-export const uploadBook = async (file: File) => {
+export const uploadBook = async (file: File, stage?: (stage: "uploading" | "parsing") => void) => {
+  if (!/\.(epub|pdf)$/i.test(file.name)) throw new Error("Chỉ hỗ trợ tệp EPUB hoặc PDF.");
+  if (file.size === 0 || file.size > 50 * 1024 * 1024) throw new Error("Tệp phải có nội dung và không vượt quá 50 MB.");
+  stage?.("uploading");
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (supabaseUrl && supabaseAnonKey) {
@@ -83,6 +99,7 @@ export const uploadBook = async (file: File) => {
     const storage = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const { error } = await storage.storage.from(signedUpload.bucket).uploadToSignedUrl(signedUpload.path, signedUpload.token, file, { contentType: file.type || undefined });
     if (error) throw new Error("Không thể upload tệp lên storage.");
+    stage?.("parsing");
     return request<{ id: string }>("/books/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -91,9 +108,35 @@ export const uploadBook = async (file: File) => {
   }
   const formData = new FormData();
   formData.append("file", file);
-  return request<{ id: string }>("/books/upload", { method: "POST", body: formData });
+  return new Promise<{ id: string }>((resolve, reject) => {
+    const upload = new XMLHttpRequest();
+    upload.open("POST", apiUrl("/books/upload")); upload.timeout = 240_000;
+    upload.upload.addEventListener("load", () => stage?.("parsing"));
+    upload.onload = () => {
+      try {
+        const result = JSON.parse(upload.responseText);
+        if (upload.status >= 200 && upload.status < 300) resolve(result);
+        else reject(new Error(result.message ?? "Không nhập được tệp sách."));
+      } catch { reject(new Error("Máy chủ trả về dữ liệu không hợp lệ.")); }
+    };
+    upload.onerror = () => reject(new Error("Mất kết nối khi tải tệp lên."));
+    upload.ontimeout = () => reject(new Error("Xử lý tệp quá lâu. Hãy thử lại với tệp nhỏ hơn."));
+    upload.send(formData);
+  });
 };
-export const deleteBook = (bookId: string) => request<void>(`/books/${bookId}`, { method: "DELETE" });
+export const deleteBook = async (bookId: string) => {
+  await request<void>(`/books/${bookId}`, { method: "DELETE" });
+  try {
+    const cache = await caches.open("gac-sach-content-v1");
+    const prefix = `/api/books/${encodeURIComponent(bookId)}`;
+    for (const key of await cache.keys()) { const path = new URL(key.url).pathname; if (path === prefix || path.startsWith(prefix + "/")) await cache.delete(key); }
+    await cache.delete("/api/books");
+    const queued = JSON.parse(localStorage.getItem("gac-sach-offline-progress") || "{}");
+    delete queued[bookId]; localStorage.setItem("gac-sach-offline-progress", JSON.stringify(queued));
+  } catch { /* Deletion succeeded even when offline storage is unavailable. */ }
+};
+
+export const restoreBook = (bookId: string) => request<void>(`/books/${bookId}/restore`, { method: "POST" });
 
 export const getTtsVoices = () => request<TtsVoice[]>("/tts/voices");
 export const getTtsChunks = (chapterId: string) => request<TtsChunk[]>(`/tts/chunks/${chapterId}`);

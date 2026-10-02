@@ -32,15 +32,15 @@ async (page) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("http://localhost:3000/library");
   await page.getByRole("heading", { name: "Một góc yên, một câu chuyện." }).waitFor();
-  await page.getByRole("link", { name: "Đọc tiếp →", exact: true }).waitFor();
+  await page.getByRole("link", { name: "Đọc tiếp", exact: true }).waitFor();
   await page.screenshot({ animations: "disabled", path: ".reader-deploy/design-library.png" });
-  await page.getByRole("link", { name: "Đọc tiếp →", exact: true }).click();
+  await page.getByRole("link", { name: "Đọc tiếp", exact: true }).click();
   await page.getByRole("heading", { name: "Mục lục" }).waitFor();
   await page.screenshot({ animations: "disabled", path: ".reader-deploy/design-book.png" });
-  await page.getByRole("link", { name: "Đọc tiếp", exact: true }).click();
-  await page.getByRole("button", { name: "▶ Đọc", exact: true }).waitFor();
+  await page.getByRole("link", { name: "Đọc tiếp · Chương 1", exact: true }).click();
+  await page.getByRole("button", { name: "Đọc", exact: true }).waitFor();
   await page.screenshot({ animations: "disabled", path: ".reader-deploy/design-reader.png" });
-  await page.locator(".player-settings summary").click();
+  await page.getByRole("button", { name: "Tùy chỉnh chữ và không gian", exact: true }).first().click();
   const luminance = (rgb) => rgb.slice(0, 3).map((v) => { v /= 255; return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }).reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
   for (const theme of ["Sáng", "Giấy", "Tối", "Rừng", "Biển", "Anh đào", "Hoàng hôn"]) {
     await page.getByRole("button", { name: theme, exact: true }).click();
@@ -52,7 +52,7 @@ async (page) => {
     const levels = colors.map(luminance).sort((a, b) => b - a);
     assert((levels[0] + .05) / (levels[1] + .05) >= 4.5, `${theme}: body contrast must meet AA`);
   }
-  await page.locator(".settings-body").evaluate((el) => { el.scrollTop = 0; });
+  await page.locator(".reader-settings-popover").evaluate((el) => { el.scrollTop = 0; });
   await page.screenshot({ animations: "disabled", path: ".reader-deploy/design-reader-dark-settings.png" });
   await page.getByRole("button", { name: "Bật âm nền", exact: true }).click();
   await page.waitForFunction(() => window.__ambientProbe.contexts.at(-1)?.state === "running");
@@ -65,10 +65,10 @@ async (page) => {
   await page.waitForFunction(() => document.documentElement.dataset.theme === "sepia");
   await page.setViewportSize({ width: 390, height: 844 });
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "Mobile must not overflow horizontally");
-  await page.locator(".settings-body").evaluate((el) => { el.scrollTop = 0; });
-  await page.getByRole("button", { name: "▶ Đọc", exact: true }).scrollIntoViewIfNeeded();
+  await page.locator(".reader-settings-popover").evaluate((el) => { el.scrollTop = 0; });
+  await page.getByRole("button", { name: "Đọc", exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ animations: "disabled", path: ".reader-deploy/design-mobile-settings.png" });
-  await page.locator(".player-settings summary").click();
+  await page.getByRole("button", { name: "Tùy chỉnh chữ và không gian", exact: true }).first().click();
   await page.evaluate(() => window.scrollTo(0, 900));
   const rect = await page.locator(".reader-dock").boundingBox();
   assert(rect.y >= 63 && rect.y < 66, "Player must stay below the 64px header");
@@ -78,14 +78,14 @@ async (page) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.waitForFunction(() => !document.querySelector(".falling-leaf"));
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.locator(".player-settings summary").click();
+  await page.getByRole("button", { name: "Tùy chỉnh chữ và không gian", exact: true }).first().click();
   await page.getByLabel("Lá rơi nhẹ").uncheck();
   assert(await page.locator(".falling-leaf").count() === 0, "Leaf toggle must stop decoration");
   await page.getByRole("button", { name: "Anh đào", exact: true }).click();
   await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.theme === "sakura");
-  await page.getByRole("button", { name: "▶ Đọc", exact: true }).waitFor();
-  await page.locator(".player-settings summary").click();
+  await page.getByRole("button", { name: "Đọc", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Tùy chỉnh chữ và không gian", exact: true }).first().click();
   assert(!(await page.getByLabel("Lá rơi nhẹ").isChecked()), "Leaf preference must persist");
   await page.getByLabel("Lá rơi nhẹ").check();
   return "PASS: library/detail/reader, theme contrast, mobile layout, sticky player, visibility audio, leaves, reduced motion, persistence";

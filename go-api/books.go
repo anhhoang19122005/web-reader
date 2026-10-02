@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
+	"log"
 	"net/http"
 	"path"
 	"strings"
@@ -18,15 +19,18 @@ import (
 const maxBookBytes = 50 << 20
 
 type bookSummary struct {
-	ID              uuid.UUID  `json:"id"`
-	Title           string     `json:"title"`
-	Author          string     `json:"author"`
-	FileType        string     `json:"fileType"`
-	HasCover        bool       `json:"hasCover"`
-	ChapterCount    int        `json:"chapterCount"`
-	CreatedAt       time.Time  `json:"createdAt"`
-	ProgressPercent int        `json:"progressPercent"`
-	LastReadAt      *time.Time `json:"lastReadAt"`
+	ID                    uuid.UUID  `json:"id"`
+	Title                 string     `json:"title"`
+	Author                string     `json:"author"`
+	FileType              string     `json:"fileType"`
+	HasCover              bool       `json:"hasCover"`
+	ChapterCount          int        `json:"chapterCount"`
+	CreatedAt             time.Time  `json:"createdAt"`
+	ProgressPercent       int        `json:"progressPercent"`
+	LastReadAt            *time.Time `json:"lastReadAt"`
+	ContinueChapterID     *uuid.UUID `json:"continueChapterId"`
+	ContinueChapterNumber int        `json:"continueChapterNumber"`
+	ContinueChapterTitle  string     `json:"continueChapterTitle"`
 }
 
 type chapterSummary struct {
@@ -184,7 +188,12 @@ func (a *App) insertBook(ctx context.Context, bookID uuid.UUID, sourceKey, cover
 }
 
 func (a *App) listBooks(w http.ResponseWriter, r *http.Request) *apiError {
-	cursor, err := a.collection(booksCollection).Find(r.Context(), bson.M{"userId": singleUserID}, options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}}))
+	cleanup, cancel := context.WithTimeout(r.Context(), time.Second)
+	if err := a.PurgeDeletedBooks(cleanup); err != nil {
+		log.Printf("Deferred book cleanup: %v", err)
+	}
+	cancel()
+	cursor, err := a.collection(booksCollection).Find(r.Context(), bson.M{"userId": singleUserID, "deletedAt": nil}, options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}}))
 	if err != nil {
 		return databaseError(err)
 	}
@@ -226,8 +235,11 @@ func (a *App) listBooks(w http.ResponseWriter, r *http.Request) *apiError {
 				return databaseError(err)
 			}
 			if err == nil {
+				book.ContinueChapterID = &chapterID
+				book.ContinueChapterNumber = chapter.ChapterNumber
+				book.ContinueChapterTitle = chapter.Title
 				position := float64(0)
-				if length := len([]rune(chapter.PlainText)); length > 0 {
+				if length := utf16Length([]rune(chapter.PlainText)); length > 0 {
 					position = min(1, float64(progress.CharacterPosition)/float64(length))
 				}
 				book.ProgressPercent = min(100, int((float64(chapter.ChapterNumber-1)+position)*100/float64(maxInt(1, document.ChapterCount))+0.5))
@@ -252,6 +264,12 @@ func (a *App) bookRoute(w http.ResponseWriter, r *http.Request, requestPath stri
 	bookID, err := uuid.Parse(parts[1])
 	if err != nil {
 		return newAPIError(http.StatusBadRequest, "INVALID_BOOK_ID", "ID sách không hợp lệ.")
+	}
+	if len(parts) == 3 && parts[2] == "restore" && r.Method == http.MethodPost {
+		return a.restoreBook(w, r, bookID)
+	}
+	if len(parts) == 3 && parts[2] == "cover" && r.Method == http.MethodGet {
+		return a.bookCover(w, r, bookID)
 	}
 	if len(parts) == 2 && r.Method == http.MethodGet {
 		return a.getBook(w, r, bookID)
@@ -314,33 +332,16 @@ func (a *App) deleteBook(w http.ResponseWriter, r *http.Request, bookID uuid.UUI
 	if err != nil {
 		return databaseError(err)
 	}
-	if _, err := a.collection(booksCollection).DeleteOne(r.Context(), bson.M{"_id": bookID.String(), "userId": singleUserID}); err != nil {
+	_, err = a.collection(booksCollection).UpdateOne(r.Context(), bson.M{"_id": document.ID, "userId": singleUserID, "deletedAt": nil}, bson.M{"$set": bson.M{"deletedAt": time.Now().UTC()}})
+	if err != nil {
 		return databaseError(err)
-	}
-	chapters, chapterErr := a.chapterSummariesForBook(r.Context(), document)
-	if chapterErr != nil {
-		return databaseError(chapterErr)
-	}
-	chapterIDs := make([]string, 0, len(chapters))
-	for _, chapter := range chapters {
-		chapterIDs = append(chapterIDs, chapter.ID)
-	}
-	if len(chapterIDs) > 0 {
-		_, _ = a.collection(audioCollection).DeleteMany(r.Context(), bson.M{"chapterId": bson.M{"$in": chapterIDs}})
-	}
-	_, _ = a.collection(chapterCollection).DeleteMany(r.Context(), bson.M{"bookId": bookID.String()})
-	_, _ = a.collection(progressCollection).DeleteOne(r.Context(), bson.M{"userId": singleUserID, "bookId": bookID.String()})
-	_, _ = a.collection(bookmarkCollection).DeleteMany(r.Context(), bson.M{"userId": singleUserID, "bookId": bookID.String()})
-	_ = a.store.Delete(r.Context(), document.OriginalFileStorageKey)
-	if document.CoverStorageKey != "" {
-		_ = a.store.Delete(r.Context(), document.CoverStorageKey)
 	}
 	w.WriteHeader(http.StatusNoContent)
 	return nil
 }
 
 func (a *App) ownedBook(ctx context.Context, bookID uuid.UUID) *apiError {
-	err := a.collection(booksCollection).FindOne(ctx, bson.M{"_id": bookID.String(), "userId": singleUserID}, options.FindOne().SetProjection(bson.M{"_id": 1})).Err()
+	err := a.collection(booksCollection).FindOne(ctx, bson.M{"_id": bookID.String(), "userId": singleUserID, "deletedAt": nil}, options.FindOne().SetProjection(bson.M{"_id": 1})).Err()
 	if err != nil {
 		if errorsIsNoRows(err) {
 			return newAPIError(http.StatusNotFound, "BOOK_NOT_FOUND", "Không tìm thấy sách.")

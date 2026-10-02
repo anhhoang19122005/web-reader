@@ -9,13 +9,18 @@ import { useTtsSession } from "../lib/tts-session";
 export function ReadingAtmosphere() {
   const path = usePathname();
   const inReader = path.startsWith("/reader/");
-  const { theme, leaves, sound, ambientVolume } = useReadingPreferences();
+  const { theme, leaves, sound, ambientVolume, ready } = useReadingPreferences();
   const enabled = useAmbientSession((s) => s.enabled);
   const speechPlaying = useTtsSession((s) => s.speechPlaying);
   const focus = useReaderSession((s) => s.focus);
   const [leaf, setLeaf] = useState<{ id: number; side: string } | null>(null);
 
-  useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
+  useEffect(() => {
+    if (!ready) return;
+    document.documentElement.dataset.theme = theme;
+    const colors = { light: "#f5f7f3", sepia: "#f4efe7", dark: "#151d18", forest: "#18251e", ocean: "#edf4f7", sakura: "#faf0f3", sunset: "#292126" };
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", colors[theme]);
+  }, [theme, ready, path]);
   useEffect(() => {
     if (!inReader || !enabled) { closeAmbient(); if (!inReader) useAmbientSession.setState({ enabled: false }); return; }
     let disposed = false;
