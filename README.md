@@ -53,3 +53,6 @@ Khi có `SAYDI_API_KEYS`, player tự tải danh sách voice tiếng Việt từ
 Các API chính: `POST /api/books/upload`, `GET /api/books`, `GET /api/books/{bookId}/chapters/{chapterId}`, `GET|PUT /api/reader/progress/{bookId}`, `GET|POST|DELETE /api/reader/bookmarks/...`, `GET /api/tts/voices`, `GET /api/tts/chunks/{chapterId}`, `POST /api/tts/generate`, `GET /api/tts/audio/{audioChunkId}`.
 
 Flyway tự chạy ba migration cho thư viện, tiến độ đọc, TTS cache và bookmark. Kiểm tra bằng `cd api; .\mvnw.cmd test` và `cd web; npm run lint; npm run build`.
+
+### Âm nền miễn phí
+Trong Reader, mở **Aa → Không gian đọc**, chọn một trong 8 âm: nhiễu nâu, trắng, hồng, quạt đều, mưa nhẹ, gió nhẹ, sóng biển hoặc suối chảy, rồi bấm **Bật âm nền**. Âm thiên nhiên là mô phỏng; mọi âm được tạo ngay trong trình duyệt, không cần key, tệp âm hoặc dịch vụ. Âm nền giảm tự động khi giọng đọc phát, tiếp tục qua chương, và reload luôn im lặng. Lựa chọn âm/âm lượng đồng bộ qua API tùy chỉnh; trạng thái bật chỉ giữ trong phiên.

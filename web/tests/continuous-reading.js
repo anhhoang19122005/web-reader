@@ -54,11 +54,11 @@ async (page) => {
   assert(await page.evaluate(() => window.__ambientProbe.contexts.length === 0), "Opening Reader must not create audio context");
   await page.getByRole("button", { name: "Tùy chỉnh chữ và không gian", exact: true }).first().click();
   await page.getByRole("button", { name: "Bật âm nền", exact: true }).click();
-  await page.waitForFunction(() => window.__ambientProbe.gains.at(-1)?.gain.value > 0.095);
+  await page.waitForFunction(() => window.__ambientProbe.gains[0]?.gain.value > 0.095);
   await page.locator("audio").dispatchEvent("playing");
-  await page.waitForFunction(() => window.__ambientProbe.gains.at(-1)?.gain.value < 0.035);
+  await page.waitForFunction(() => window.__ambientProbe.gains[0]?.gain.value < 0.035);
   await page.locator("audio").dispatchEvent("waiting");
-  await page.waitForFunction(() => window.__ambientProbe.gains.at(-1)?.gain.value > 0.095);
+  await page.waitForFunction(() => window.__ambientProbe.gains[0]?.gain.value > 0.095);
   await page.getByLabel("Loại âm nền").selectOption("rain");
   await page.waitForFunction(() => window.__ambientProbe.sources.length === 2);
   assert(await page.evaluate(() => window.__ambientProbe.contexts.length === 1), "Changing ambience must reuse one audio context");

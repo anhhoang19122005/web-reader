@@ -36,7 +36,7 @@ func validatePreferences(values map[string]json.RawMessage) (bson.M, bool) {
 			valid = ok && (s == "sans" || s == "serif")
 		case "sound":
 			s, ok := value.(string)
-			valid = ok && (s == "brown" || s == "rain")
+			valid = ok && slices.Contains([]string{"brown", "white", "pink", "fan", "rain", "wind", "waves", "stream"}, s)
 		case "leaves":
 			_, valid = value.(bool)
 		case "fontSize", "lineHeight", "columnWidth", "ambientVolume":

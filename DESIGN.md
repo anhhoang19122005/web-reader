@@ -61,3 +61,6 @@ Upload nhận nhiều tệp bằng chọn/kéo thả, xử lý tuần tự và b
 PWA dùng manifest, service worker và CacheStorage của trình duyệt, không thêm thư viện. Chỉ cache nội dung GET thành công, tối đa 40 mục sách/chương/bìa; không cache request tạo TTS, secret hoặc trạng thái phát. Offline shell được làm mới khi mở app; dữ liệu chương giữ qua phiên. Trang Sách offline cho đọc lại, xóa cache và ghi tiến độ vào queue local để gửi khi online, backend vẫn giữ mốc xa nhất. Offline không tổng hợp giọng đọc. Cache tồn tại riêng trên từng thiết bị.
 
 Định dạng EPUB vẫn dùng plainText làm nguồn offset. Khi cần khôi phục in đậm/nghiêng/ảnh, thêm các span định dạng theo [start,end,kiểu]; không chuyển Reader sang HTML làm lệch vị trí TTS.
+
+## Âm nền mô phỏng
+Aa → Không gian đọc có hai nhóm: Âm đều (nhiễu nâu, trắng, hồng, quạt) và Thiên nhiên mô phỏng (mưa nhẹ, gió nhẹ, sóng biển, suối). Tất cả được tạo bằng Web Audio trên thiết bị, không tải tệp, gọi dịch vụ hoặc thêm thư viện. Một loop mono 12 giây được lọc, cân mức âm và nối mềm; gió/sóng/suối có biến thiên riêng. Chuyển âm crossfade 250ms, tối đa hai nguồn trong chuyển tiếp và một nguồn sau đó, dùng một AudioContext. Chọn khi tắt chỉ lưu cấu hình; reload không tự phát. Giữ âm lượng 10% mặc định, tối đa 30% và duck theo speechPlaying. Lựa chọn sound đồng bộ như các tùy chỉnh khác; API cần cập nhật trước web để nhận mã mới.

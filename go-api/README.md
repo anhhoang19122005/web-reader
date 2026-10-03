@@ -191,7 +191,7 @@ Backend Spring và PostgreSQL cũ vẫn nằm trong thư mục `api/`; chúng ch
 ## Tùy chỉnh Reader và vị trí đọc
 
 - `GET /api/reader/preferences`: trả `{ preferences: null, updatedAt: null }` khi chưa lưu, hoặc object tùy chỉnh của người dùng cá nhân hiện tại.
-- `PATCH /api/reader/preferences`: gửi chỉ các trường thay đổi. Hỗ trợ `theme` (7 theme), `font` (`sans`/`serif`), `fontSize` (16–28, số nguyên), `lineHeight` (1.5–2.2, bước 0.1), `columnWidth` (60/68/75), `leaves` (boolean), `sound` (`brown`/`rain`), `ambientVolume` (0–0.3). Không nhận trường lạ hoặc trạng thái phát.
+- `PATCH /api/reader/preferences`: gửi chỉ các trường thay đổi. Hỗ trợ `theme` (7 theme), `font` (`sans`/`serif`), `fontSize` (16–28, số nguyên), `lineHeight` (1.5–2.2, bước 0.1), `columnWidth` (60/68/75), `leaves` (boolean), `sound` (`brown`/`white`/`pink`/`fan`/`rain`/`wind`/`waves`/`stream`), `ambientVolume` (0–0.3). Không nhận trường lạ hoặc trạng thái phát.
 - MongoDB dùng collection `reading_preferences`, `_id` là ID người dùng cố định hiện có; không cần migration/index mới. PATCH `$set` từng trường và `updatedAt`, không thay thế cả document.
 - Web dùng localStorage ngay, debounce PATCH 500ms, giữ trường chưa gửi được trong `pending`, thử lại khi trở lại tab/có kết nối và sau lỗi. Cấu hình server chỉ thay các trường local không có thay đổi đang chờ. Khi chưa có bản server, đưa bản local lên một lần.
 - Tiến độ/bookmark giữ nguyên UTF-16 `characterPosition` và schema hiện có. Cuộn tay đo vị trí qua DOM Range; khôi phục/đổi font/resize/cuộn TTS không tự ghi vị trí cuộn. Backend tiếp tục giữ mốc xa nhất.
