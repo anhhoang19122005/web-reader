@@ -17,4 +17,8 @@ tools/piper/espeak-ng-data/
 tools/piper/voices/*
 !tools/piper/.gitkeep
 !tools/piper/voices/.gitkeep
+# Spring Boot backend cũ: chỉ giữ local, không commit lên GitHub
+/api/
+/docker-compose.yml
+/start-reader.ps1
 

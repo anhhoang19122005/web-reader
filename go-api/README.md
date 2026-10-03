@@ -1,6 +1,6 @@
 # Novel Reader Go API
 
-Backend Go thay Spring Boot cho phần triển khai mới. API dùng MongoDB Atlas, Supabase Storage khi deploy và Edge-TTS qua Go nên không cần Python.
+Backend Go cho phần triển khai mới. API dùng MongoDB Atlas, Supabase Storage khi deploy và Edge-TTS qua Go nên không cần Python.
 
 ## Chạy local
 
@@ -185,8 +185,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<publishable-or-anon-key>
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` chỉ đặt ở API project. Web chỉ dùng key publishable/anon để upload qua signed URL ngắn hạn do API tạo.
-
-Backend Spring và PostgreSQL cũ vẫn nằm trong thư mục `api/`; chúng chỉ được dùng khi chạy `start-reader.ps1`.
 
 ## Tùy chỉnh Reader và vị trí đọc
 

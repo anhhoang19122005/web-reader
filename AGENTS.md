@@ -1,16 +1,14 @@
 # Novel Reader — Agent Ramp-Up Guide
 
-## Runtime choice: Spring Boot vs Go
+## Runtime: Go API
 
-- **Spring Boot (old API)**: `cd api && .\mvnw.cmd spring-boot:run` — port 8080, health at `/api/health`. Requires Docker + `.env`.
-- **Go API (new)**: `cd go-api && go run ./cmd/local` — port 8081, health at `/api/health`. Auto-migrates if `AUTO_MIGRATE=true`.
-- **Both share** the `web/` Next.js frontend at `http://localhost:3000`. CORS must allow `http://localhost:3000` (local) or the Vercel domain (production).
+- **Go API**: `cd go-api && go run ./cmd/local` — port 8081, health at `/api/health`. Auto-migrates if `AUTO_MIGRATE=true`.
+- The Go API serves the `web/` Next.js frontend at `http://localhost:3000`. CORS must allow `http://localhost:3000` (local) or the Vercel domain (production).
 
 ## Docker & DB
 
 - Go uses MongoDB Atlas. Set `MONGODB_URI` and `MONGODB_DATABASE` in the root `.env` before running `start-reader-go.ps1`.
 - Migration creates MongoDB indexes automatically on Go startup (`AUTO_MIGRATE=true`). To run manually: `go run ./cmd/migrate` from `go-api/`.
-- Docker Compose PostgreSQL is retained for the old Spring API only (`start-reader.ps1`).
 
 ## Environment
 
@@ -39,15 +37,14 @@
 
 ## Testing
 
-- Spring Boot: `cd api; .\mvnw.cmd test`
 - Go: unit tests exist (`go test ./...` from `go-api/`)
-- No CI config found; Atlas credentials are required for Go integration tests. Docker + compose remains the integration prerequisite for Spring.
+- No CI config found; Atlas credentials are required for Go integration tests.
 
 ## What NOT to miss
 
 - The `.env` file **must** exist and have correct values before starting anything.
 - `AUTO_MIGRATE=true` on the Go backend will create MongoDB indexes on every start — disable if you want manual control.
-- Edge-TTS in the Go backend is built-in; no Python pip install needed. The Spring Boot Docker image installs edge-tts Python package internally.
+- Edge-TTS in the Go backend is built-in; no Python pip install needed.
 - CORS: if `CORS_ALLOWED_ORIGINS` is missing or wrong, the web will fail to call the API.
 
 ## Implementation Change Summary

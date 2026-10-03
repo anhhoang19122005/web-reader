@@ -30,19 +30,7 @@ API dành cho tunnel mới bật bảo vệ token. Mật khẩu web dùng HTTP B
 .\start-reader-go.ps1
 ```
 
-Lệnh này tự cài Go nếu thiếu, chạy migration MongoDB Atlas, Go API tại `http://localhost:8081/api` và web tại `http://localhost:3000`. Backend mới nằm trong [`go-api`](go-api/README.md), dùng Edge-TTS trực tiếp bằng Go và thêm SaydiVoice khi có `SAYDI_API_KEYS`, cùng cấu hình deploy Vercel + Supabase.
-
-Thư mục `api` giữ lại backend Spring Boot cũ để tham chiếu và rollback; web dùng API Go khi chạy bằng `start-reader-go.ps1`.
-
-## Bản Spring Boot cũ
-
-```powershell
-.\start-reader.ps1
-```
-
-Lệnh trên khởi động PostgreSQL, tự cài `edge-tts` nếu thiếu và mở API, web trong hai cửa sổ PowerShell riêng.
-
-API health: `http://localhost:8080/api/health`
+Lệnh này tự cài Go nếu thiếu, chạy migration MongoDB Atlas, Go API tại `http://localhost:8081/api` và web tại `http://localhost:3000`. Backend duy nhất nằm trong [`go-api`](go-api/README.md), dùng Edge-TTS trực tiếp bằng Go và thêm SaydiVoice khi có `SAYDI_API_KEYS`, cùng cấu hình deploy Vercel + Supabase.
 
 Mở `http://localhost:3000/library` để upload EPUB/PDF, chọn chapter và đọc. Tiến độ, dấu trang, theme, cỡ chữ và player TTS được lưu theo user mặc định single-user.
 
@@ -52,7 +40,7 @@ Khi có `SAYDI_API_KEYS`, player tự tải danh sách voice tiếng Việt từ
 
 Các API chính: `POST /api/books/upload`, `GET /api/books`, `GET /api/books/{bookId}/chapters/{chapterId}`, `GET|PUT /api/reader/progress/{bookId}`, `GET|POST|DELETE /api/reader/bookmarks/...`, `GET /api/tts/voices`, `GET /api/tts/chunks/{chapterId}`, `POST /api/tts/generate`, `GET /api/tts/audio/{audioChunkId}`.
 
-Flyway tự chạy ba migration cho thư viện, tiến độ đọc, TTS cache và bookmark. Kiểm tra bằng `cd api; .\mvnw.cmd test` và `cd web; npm run lint; npm run build`.
+Go API tự migration index MongoDB cho thư viện, tiến độ đọc, TTS cache và bookmark. Kiểm tra bằng `cd go-api; go test ./...` và `cd web; npm run lint; npm run build`.
 
 ### Âm nền miễn phí
 Trong Reader, mở **Aa → Không gian đọc**, chọn một trong 8 âm: nhiễu nâu, trắng, hồng, quạt đều, mưa nhẹ, gió nhẹ, sóng biển hoặc suối chảy, rồi bấm **Bật âm nền**. Âm thiên nhiên là mô phỏng; mọi âm được tạo ngay trong trình duyệt, không cần key, tệp âm hoặc dịch vụ. Âm nền giảm tự động khi giọng đọc phát, tiếp tục qua chương, và reload luôn im lặng. Lựa chọn âm/âm lượng đồng bộ qua API tùy chỉnh; trạng thái bật chỉ giữ trong phiên.
