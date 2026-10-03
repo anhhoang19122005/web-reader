@@ -53,14 +53,14 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
   const [bookmarkResume, setBookmarkResume] = useState<{ chapterId: string; position: number } | null>(null);
   const [ttsChunk, setTtsChunk] = useState<TtsChunk | null>(null);
   const [viewPosition, setViewPosition] = useState(0);
-  const [followReading, setFollowReading] = useState(true);
   const [showHint, setShowHint] = useState(false);
   const [chapterSearch, setChapterSearch] = useState("");
   const textContainerRef = useRef<HTMLDivElement | null>(null);
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const tocTrigger = useRef<HTMLElement | null>(null);
-  const followReadingRef = useRef(true);
+  const snoozed = useRef(false);
+  const lastFollowedChunk = useRef<number | null>(null);
   const autoUntil = useRef(0);
   const manualUntil = useRef(0);
   const restored = useRef("");
@@ -95,13 +95,30 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
     anchor.current = { position, gap: rect ? Math.min(0, rect.top - inset()) : 0, atTop: window.scrollY <= 1 };
     if (!useTtsSession.getState().running) setViewPosition(position);
   }, [inset]);
+  const followPassage = useCallback(() => {
+    const highlights = Array.from(textContainerRef.current?.querySelectorAll<HTMLElement>(".reading-highlight") ?? []);
+    const rects = highlights.flatMap((node) => Array.from(node.getClientRects())).filter((rect) => rect.height > 0);
+    if (!rects.length) return;
+    const top = Math.min(...rects.map((rect) => rect.top));
+    const bottom = Math.max(...rects.map((rect) => rect.bottom));
+    const viewportTop = inset();
+    const controls = document.querySelector<HTMLElement>(focus ? ".focus-controls" : ".mobile-reader-bar");
+    const controlsRect = controls?.getBoundingClientRect();
+    const viewportBottom = controlsRect?.height && controlsRect.top > window.innerHeight / 2 ? controlsRect.top - 16 : window.innerHeight - 24;
+    // Oversized passages start at the reading edge; fitting passages stay fully visible.
+    if (top < viewportTop || bottom > viewportBottom) {
+      suppressSave();
+      window.scrollTo({ top: Math.max(0, window.scrollY + top - viewportTop), behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+    }
+  }, [focus, inset, suppressSave]);
   const restoreView = useCallback(() => {
     if (!textContainerRef.current) return;
+    if (!snoozed.current && textContainerRef.current.querySelector(".reading-highlight")) { followPassage(); return; }
     suppressSave();
     if (anchor.current.atTop) window.scrollTo({ top: 0, behavior: "instant" });
     else scrollToCharacter(textContainerRef.current, anchor.current.position, inset() + anchor.current.gap);
     if (!useTtsSession.getState().running) setViewPosition(anchor.current.position);
-  }, [inset, suppressSave]);
+  }, [followPassage, inset, suppressSave]);
 
   const handleTtsProgress = useCallback((characterPosition: number) => {
     setViewPosition(characterPosition);
@@ -115,9 +132,16 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
     dialogRef.current?.close();
     useTtsSession.setState({ running: auto, autoplayChapterId: auto ? nextChapterId : "" });
     setTtsChunk(null);
+    snoozed.current = false;
+    lastFollowedChunk.current = null;
     persistProgress({ nextChapterId, characterPosition: 0 });
     router.push(`/reader/${bookId}/${nextChapterId}`);
   }, [bookId, persistProgress, router, suppressSave]);
+
+  useEffect(() => {
+    snoozed.current = false;
+    lastFollowedChunk.current = null;
+  }, [chapterId]);
 
   useEffect(() => {
     if (chapterText === undefined || !ready || progressQuery.isLoading || restored.current === chapterId) return;
@@ -135,16 +159,23 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
   useEffect(() => {
     if (!chapterText) return;
     let frame = 0;
-    const markManual = (event: Event) => {
-      const target = event.target;
-      if (target instanceof Element && target.closest("input,select,button,a,summary,audio,dialog,.settings-body")) return;
+    const markManual = (event?: Event) => {
+      const target = event?.target;
+      if (target instanceof Element && (target.closest("input,textarea,select,dialog,[popover],[contenteditable],.settings-body") || (event instanceof KeyboardEvent && target.closest("button,a,summary,audio")))) return;
+      const wasAutomatic = Date.now() < autoUntil.current;
       autoUntil.current = 0;
       manualUntil.current = Date.now() + 2500;
-      if (followReadingRef.current) { followReadingRef.current = false; setFollowReading(false); }
+      snoozed.current = true;
+      if (wasAutomatic) window.scrollTo({ top: window.scrollY, behavior: "instant" });
+    };
+    const scrollbarPointer = (event: PointerEvent) => {
+      if (event.clientX >= document.documentElement.clientWidth || event.clientY >= document.documentElement.clientHeight) markManual(event);
     };
     const scrollKey = (event: KeyboardEvent) => { if (["PageDown", "PageUp", "Home", "End", "ArrowDown", "ArrowUp", " "].includes(event.key)) markManual(event); };
     const handleScroll = () => {
-      if (Date.now() < autoUntil.current) return;
+      if (Date.now() < autoUntil.current) { autoUntil.current = Date.now() + 800; return; }
+      // Native scrollbar drags do not consistently emit pointer events to the page.
+      markManual();
       cancelAnimationFrame(frame); frame = requestAnimationFrame(rememberView);
       if (Date.now() < autoUntil.current || Date.now() > manualUntil.current || useTtsSession.getState().running || restored.current !== chapterId) return;
       clearTimeout(saveTimer.current);
@@ -154,12 +185,16 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
         persistProgress({ nextChapterId: chapterId, characterPosition: anchor.current.position });
       }, 1500);
     };
+    const finishAutomaticScroll = () => {
+      if (Date.now() < autoUntil.current) { autoUntil.current = 0; rememberView(); }
+    };
     window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("scrollend", finishAutomaticScroll);
     window.addEventListener("wheel", markManual, { passive: true });
     window.addEventListener("touchmove", markManual, { passive: true });
-    window.addEventListener("pointerdown", markManual, { passive: true });
+    window.addEventListener("pointerdown", scrollbarPointer, { passive: true });
     window.addEventListener("keydown", scrollKey);
-    return () => { clearTimeout(saveTimer.current); cancelAnimationFrame(frame); window.removeEventListener("scroll", handleScroll); window.removeEventListener("wheel", markManual); window.removeEventListener("touchmove", markManual); window.removeEventListener("pointerdown", markManual); window.removeEventListener("keydown", scrollKey); };
+    return () => { clearTimeout(saveTimer.current); cancelAnimationFrame(frame); window.removeEventListener("scroll", handleScroll); window.removeEventListener("scrollend", finishAutomaticScroll); window.removeEventListener("wheel", markManual); window.removeEventListener("touchmove", markManual); window.removeEventListener("pointerdown", scrollbarPointer); window.removeEventListener("keydown", scrollKey); };
   }, [chapterId, chapterText, persistProgress, rememberView]);
 
   useEffect(() => {
@@ -178,7 +213,9 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
     });
     if (textContainerRef.current) observer.observe(textContainerRef.current);
     if (playerContainerRef.current) observer.observe(playerContainerRef.current);
-    return () => { unsubscribe(); observer.disconnect(); cancelAnimationFrame(frame); };
+    const resize = () => { suppressSave(); cancelAnimationFrame(frame); frame = requestAnimationFrame(restoreView); };
+    window.addEventListener("resize", resize);
+    return () => { unsubscribe(); observer.disconnect(); window.removeEventListener("resize", resize); cancelAnimationFrame(frame); };
   }, [chapterText, rememberView, restoreView, suppressSave]);
 
   useEffect(() => {
@@ -190,19 +227,16 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
   useEffect(() => () => { useReaderSession.setState({ focus: false }); }, []);
 
   useEffect(() => {
-    if (!ttsChunk || !followReadingRef.current) return;
-    const frame = requestAnimationFrame(() => {
-      const container = textContainerRef.current;
-      const node = container?.querySelector(".reading-highlight");
-      if (!(node instanceof HTMLElement)) return;
-      const rect = node.getBoundingClientRect();
-      if (rect.top < inset() || rect.bottom > window.innerHeight - 80) {
-        suppressSave();
-        window.scrollTo({ top: window.scrollY + rect.top - inset(), behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
-      }
-    });
+    if (!ttsChunk) return;
+    if (ttsChunk.chunkIndex === lastFollowedChunk.current) {
+      if (snoozed.current) return;
+    } else {
+      snoozed.current = false;
+      lastFollowedChunk.current = ttsChunk.chunkIndex;
+    }
+    const frame = requestAnimationFrame(followPassage);
     return () => cancelAnimationFrame(frame);
-  }, [ttsChunk, inset, suppressSave]);
+  }, [ttsChunk, followPassage]);
 
   useEffect(() => {
     if (!chapterText || !nextChapter || (viewPosition / chapterText.length < .7 && (ttsChunk?.endCharacter ?? 0) < chapterText.length)) return;
@@ -222,7 +256,9 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
     dialogRef.current?.close(); stopReading(); suppressSave();
     setBookmarkResume({ chapterId: targetChapter, position });
     if (targetChapter === chapterId) {
-      followReadingRef.current = false; setFollowReading(false); setTtsChunk(null);
+      setTtsChunk(null);
+      snoozed.current = false;
+      lastFollowedChunk.current = null;
       anchor.current = { position: Math.min(chapterText?.length ?? 0, position), gap: 0, atTop: position === 0 };
       restoreView();
     } else {
@@ -253,8 +289,7 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
     return () => window.removeEventListener("keydown", keydown);
   });
 
-  function handleTtsChunk(chunk: TtsChunk | null, info?: { auto: boolean }) {
-    if (chunk && !info?.auto) { followReadingRef.current = true; setFollowReading(true); }
+  function handleTtsChunk(chunk: TtsChunk | null) {
     setTtsChunk(chunk);
     if (chunk) { setViewPosition(chunk.startCharacter); persistProgress({ nextChapterId: chapterId, characterPosition: chunk.startCharacter }); }
   }
@@ -284,7 +319,7 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
         if (nextChapter) selectChapter(nextChapter.id, true);
         else stopReading();
       }} /></div>
-      <div className="reader-tools mt-4 flex flex-wrap items-center gap-3 text-sm"><button disabled={bookmarkMutation.isPending} onClick={() => bookmarkMutation.mutate(bookmarkPosition)}><Icon name="bookmark" /> Lưu dấu trang</button><button aria-pressed={followReading} onClick={() => { followReadingRef.current = !followReading; setFollowReading(!followReading); }}><Icon name="eye" />{followReading ? "Bám theo đoạn đọc" : "Đã dừng bám theo"}</button><button onClick={(e) => { openToc(e.currentTarget); setDrawerView("bookmarks"); }}>{bookmarksQuery.data?.length ?? 0} dấu trang</button></div>
+      <div className="reader-tools mt-4 flex flex-wrap items-center gap-3 text-sm"><button disabled={bookmarkMutation.isPending} onClick={() => bookmarkMutation.mutate(bookmarkPosition)}><Icon name="bookmark" /> Lưu dấu trang</button><button onClick={(e) => { openToc(e.currentTarget); setDrawerView("bookmarks"); }}>{bookmarksQuery.data?.length ?? 0} dấu trang</button></div>
       {bookmarkMutation.isError && <p className="error-message" role="alert">Không lưu được dấu trang.</p>}
       {showHint && <p className="reader-tools subtle mt-3">Dùng nút Tập trung hoặc phím F để ẩn điều khiển. Chạm vào chữ vẫn chọn văn bản bình thường. <button aria-label="Ẩn gợi ý tập trung" onClick={() => { localStorage.setItem("gac-sach-focus-hint", "seen"); setShowHint(false); }}>Đã hiểu</button></p>}
       <p className="reader-estimate subtle mt-4">{percent}% chương · {bookPercent}% cả sách · Còn khoảng {remainingMinutes} phút đọc</p>
