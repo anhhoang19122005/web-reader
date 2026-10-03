@@ -184,3 +184,11 @@ option,optgroup { color:var(--foreground); background:var(--surface); }
 }
 
 .app-surface button { min-height:44px; min-width:44px; }
+
+.theme-picker-trigger { position:fixed; right:24px; bottom:max(24px,env(safe-area-inset-bottom)); z-index:20; min-height:44px; padding:8px 16px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--foreground); }
+.theme-picker-trigger:hover { background:var(--accent-soft); }
+.theme-picker-trigger:disabled { opacity:.6; }
+.theme-picker-panel .drawer-header { margin-bottom:20px; }
+.theme-picker-panel button { min-height:44px; }
+.theme-picker-panel .theme-option[aria-pressed="true"] { background:var(--accent-soft); border-color:var(--accent); }
+@media(max-width:640px) { .theme-picker-trigger { right:12px; bottom:calc(80px + env(safe-area-inset-bottom)); } }

@@ -49,3 +49,9 @@
 - `AUTO_MIGRATE=true` on the Go backend will create MongoDB indexes on every start — disable if you want manual control.
 - Edge-TTS in the Go backend is built-in; no Python pip install needed. The Spring Boot Docker image installs edge-tts Python package internally.
 - CORS: if `CORS_ALLOWED_ORIGINS` is missing or wrong, the web will fail to call the API.
+
+## Implementation Change Summary
+
+- After every implementation, end the final response with a concise change summary in Vietnamese so the user can review quickly.
+- List every file added, modified, or deleted for the task, with its path and a short explanation of what changed in that file. Use clickable file links where possible.
+- Include the validation performed and its results; explicitly state when checks were not run.

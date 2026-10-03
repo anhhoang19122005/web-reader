@@ -114,3 +114,8 @@ if ($Publish) {
         if ($LASTEXITCODE -ne 0) { throw 'Deploy Vercel thất bại.' }
     } finally { Pop-Location }
 }
+
+# Only retire running backends/tunnels after the production website has switched.
+try {
+    & (Join-Path $root 'cleanup-reader-home.ps1') -RetireProcesses:$Publish -PreviousPort $previous.port -PreviousTunnelPid $previous.tunnelPid
+} catch { Write-Warning "Chưa dọn được tài nguyên cũ: $($_.Exception.Message)" }
