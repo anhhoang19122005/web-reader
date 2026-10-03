@@ -64,3 +64,5 @@ PWA dùng manifest, service worker và CacheStorage của trình duyệt, không
 
 ## Âm nền mô phỏng
 Aa → Không gian đọc có hai nhóm: Âm đều (nhiễu nâu, trắng, hồng, quạt) và Thiên nhiên mô phỏng (mưa nhẹ, gió nhẹ, sóng biển, suối). Tất cả được tạo bằng Web Audio trên thiết bị, không tải tệp, gọi dịch vụ hoặc thêm thư viện. Một loop mono 12 giây được lọc, cân mức âm và nối mềm; gió/sóng/suối có biến thiên riêng. Chuyển âm crossfade 250ms, tối đa hai nguồn trong chuyển tiếp và một nguồn sau đó, dùng một AudioContext. Chọn khi tắt chỉ lưu cấu hình; reload không tự phát. Giữ âm lượng 10% mặc định, tối đa 30% và duck theo speechPlaying. Lựa chọn sound đồng bộ như các tùy chỉnh khác; API cần cập nhật trước web để nhận mã mới.
+
+Thẻ sách có padding 16px trên desktop, 12px trên mobile và bo góc 12px. Bìa dùng bốn tông rêu/biển/hồng/mật ong; ảnh bìa có khung đệm, giữ nguyên tỷ lệ. Hover và focus bàn phím làm rõ nền/viền cùng tông, không thay đổi kích thước hay vị trí thẻ; màu chữ nội dung vẫn theo theme.
