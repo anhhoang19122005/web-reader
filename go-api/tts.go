@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -320,59 +321,86 @@ func (a *App) generateTTS(w http.ResponseWriter, r *http.Request) *apiError {
 		effectivePitch, effectiveVolume = 0, 1
 	}
 	textHash := hash(fmt.Sprintf("%s|%s|%.4f|%.4f|%.4f", chunk.Text, request.VoiceID, request.SpeakingRate, effectivePitch, effectiveVolume))
+	// Share cache lookup, synthesis and persistence, not only provider work.
+	// One disconnected listener must not cancel audio needed by other listeners.
+	// ponytail: one backend instance; use a distributed lock if multiple workers generate TTS.
+	key := fmt.Sprintf("%s|%d|%s|%g|%g|%g", chapter.ID, chunk.ChunkIndex, textHash, request.SpeakingRate, effectivePitch, effectiveVolume)
+	result := a.ttsGeneration.DoChan(key, func() (any, error) {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 240*time.Second)
+		defer cancel()
+		response, err := a.generateTTSAudio(ctx, chapter, chunk, request.VoiceID, request.SpeakingRate, effectivePitch, effectiveVolume, textHash)
+		if err != nil {
+			return nil, err
+		}
+		return response, nil
+	})
+	select {
+	case <-r.Context().Done():
+		return newAPIError(http.StatusRequestTimeout, "TTS_CANCELLED", "Yêu cầu đọc đã bị hủy.")
+	case generated := <-result:
+		if generated.Err != nil {
+			return generated.Err.(*apiError)
+		}
+		if owned := a.ownedBook(r.Context(), chapter.BookID); owned != nil {
+			return owned
+		}
+		writeJSON(w, http.StatusOK, generated.Val.(ttsResponse))
+		return nil
+	}
+}
+
+func (a *App) generateTTSAudio(ctx context.Context, chapter chapterForTTS, chunk ttsChunk, voiceID string, rate, effectivePitch, effectiveVolume float64, textHash string) (ttsResponse, *apiError) {
 	var cached mongoAudioChunk
-	err := a.collection(audioCollection).FindOne(r.Context(), bson.M{
-		"chapterId": chapter.ID.String(), "chunkIndex": chunk.ChunkIndex, "voiceId": request.VoiceID,
-		"speakingRate": request.SpeakingRate, "pitch": effectivePitch, "volume": effectiveVolume, "textHash": textHash,
+	err := a.collection(audioCollection).FindOne(ctx, bson.M{
+		"chapterId": chapter.ID.String(), "chunkIndex": chunk.ChunkIndex, "voiceId": voiceID,
+		"speakingRate": rate, "pitch": effectivePitch, "volume": effectiveVolume, "textHash": textHash,
 	}).Decode(&cached)
 	if err == nil {
 		cachedID, parseErr := uuid.Parse(cached.ID)
 		if parseErr != nil {
-			return databaseError(parseErr)
+			return ttsResponse{}, databaseError(parseErr)
 		}
-		writeJSON(w, http.StatusOK, ttsResponse{AudioURL: "/tts/audio/" + cachedID.String(), MimeType: cached.MimeType, DurationMS: cached.DurationMS, ChunkIndex: cached.ChunkIndex, StartCharacter: cached.StartCharacter, EndCharacter: cached.EndCharacter, Cached: true})
-		return nil
+		return ttsResponse{AudioURL: "/tts/audio/" + cachedID.String(), MimeType: cached.MimeType, DurationMS: cached.DurationMS, ChunkIndex: cached.ChunkIndex, StartCharacter: cached.StartCharacter, EndCharacter: cached.EndCharacter, Cached: true}, nil
 	}
 	if !errorsIsNoRows(err) {
-		return databaseError(err)
+		return ttsResponse{}, databaseError(err)
 	}
 	var voice *ttsVoice
-	for _, candidate := range a.availableVoices(r.Context()) {
-		if candidate.ID == request.VoiceID {
+	for _, candidate := range a.availableVoices(ctx) {
+		if candidate.ID == voiceID {
 			value := candidate
 			voice = &value
 			break
 		}
 	}
 	if voice == nil {
-		return newAPIError(http.StatusBadRequest, "TTS_VOICE_NOT_FOUND", "Không tìm thấy voice tiếng Việt.")
+		return ttsResponse{}, newAPIError(http.StatusBadRequest, "TTS_VOICE_NOT_FOUND", "Không tìm thấy voice tiếng Việt.")
 	}
 
-	audio, mimeType, durationMS, synthesisErr := a.synthesize(r.Context(), *voice, chunk.Text, request.SpeakingRate, effectivePitch, effectiveVolume)
+	audio, mimeType, durationMS, synthesisErr := a.synthesize(ctx, *voice, chunk.Text, rate, effectivePitch, effectiveVolume)
 	if synthesisErr != nil {
-		return synthesisErr
+		return ttsResponse{}, synthesisErr
 	}
 	// A long synthesis may finish after the book was deleted.
-	if owned := a.ownedBook(r.Context(), chapter.BookID); owned != nil {
-		return owned
+	if owned := a.ownedBook(ctx, chapter.BookID); owned != nil {
+		return ttsResponse{}, owned
 	}
 	audioID := uuid.New()
 	storageKey := "tts/" + audioID.String() + map[bool]string{true: ".wav", false: ".mp3"}[mimeType == "audio/wav"]
-	if err := a.store.Put(r.Context(), storageKey, audio, mimeType); err != nil {
-		return newAPIError(http.StatusInternalServerError, "STORAGE_FAILED", "Không thể lưu audio.")
+	if err := a.store.Put(ctx, storageKey, audio, mimeType); err != nil {
+		return ttsResponse{}, newAPIError(http.StatusInternalServerError, "STORAGE_FAILED", "Không thể lưu audio.")
 	}
-	_, err = a.collection(audioCollection).InsertOne(r.Context(), mongoAudioChunk{
+	_, err = a.collection(audioCollection).InsertOne(ctx, mongoAudioChunk{
 		ID: audioID.String(), ChapterID: chapter.ID.String(), ChunkIndex: chunk.ChunkIndex, TextHash: textHash, Text: chunk.Text,
-		VoiceID: voice.ID, SpeakingRate: request.SpeakingRate, Pitch: effectivePitch, Volume: effectiveVolume,
+		VoiceID: voice.ID, SpeakingRate: rate, Pitch: effectivePitch, Volume: effectiveVolume,
 		StartCharacter: chunk.StartCharacter, EndCharacter: chunk.EndCharacter, AudioStorageKey: storageKey,
 		MimeType: mimeType, DurationMS: durationMS, CreatedAt: time.Now().UTC(),
 	})
 	if err != nil {
-		_ = a.store.Delete(r.Context(), storageKey)
-		return databaseError(err)
+		_ = a.store.Delete(ctx, storageKey)
+		return ttsResponse{}, databaseError(err)
 	}
-	writeJSON(w, http.StatusOK, ttsResponse{AudioURL: "/tts/audio/" + audioID.String(), MimeType: mimeType, DurationMS: durationMS, ChunkIndex: chunk.ChunkIndex, StartCharacter: chunk.StartCharacter, EndCharacter: chunk.EndCharacter})
-	return nil
+	return ttsResponse{AudioURL: "/tts/audio/" + audioID.String(), MimeType: mimeType, DurationMS: durationMS, ChunkIndex: chunk.ChunkIndex, StartCharacter: chunk.StartCharacter, EndCharacter: chunk.EndCharacter}, nil
 }
 
 func (a *App) ttsAudio(w http.ResponseWriter, r *http.Request, requestPath string) *apiError {
@@ -397,11 +425,28 @@ func (a *App) ttsAudio(w http.ResponseWriter, r *http.Request, requestPath strin
 	} else if err != nil {
 		return databaseError(err)
 	}
+	return a.serveTTSAudio(w, r, audio)
+}
+
+func (a *App) serveTTSAudio(w http.ResponseWriter, r *http.Request, audio mongoAudioChunk) *apiError {
+	w.Header().Set("Content-Type", audio.MimeType)
+	if store, ok := a.store.(*localStorage); ok {
+		path, err := store.path(audio.AudioStorageKey)
+		if err != nil {
+			return newAPIError(http.StatusNotFound, "STORAGE_NOT_FOUND", "Không tìm thấy tệp âm thanh.")
+		}
+		file, err := os.Open(path)
+		if err != nil {
+			return newAPIError(http.StatusNotFound, "STORAGE_NOT_FOUND", "Không tìm thấy tệp âm thanh.")
+		}
+		defer file.Close()
+		http.ServeContent(w, r, audio.AudioStorageKey, audio.CreatedAt, file)
+		return nil
+	}
 	content, err := a.store.Get(r.Context(), audio.AudioStorageKey)
 	if err != nil {
 		return newAPIError(http.StatusNotFound, "STORAGE_NOT_FOUND", "Không tìm thấy tệp âm thanh.")
 	}
-	w.Header().Set("Content-Type", audio.MimeType)
 	http.ServeContent(w, r, audio.AudioStorageKey, audio.CreatedAt, bytes.NewReader(content))
 	return nil
 }

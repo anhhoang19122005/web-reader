@@ -17,6 +17,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+	"golang.org/x/sync/singleflight"
 )
 
 const singleUserID = "00000000-0000-0000-0000-000000000001"
@@ -48,6 +49,7 @@ type Config struct {
 }
 
 type App struct {
+	ttsGeneration singleflight.Group
 	client        *mongo.Client
 	db            *mongo.Database
 	store         Storage
