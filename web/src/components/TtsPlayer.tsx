@@ -23,7 +23,7 @@ export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChang
   const pendingSeek = useRef<number | null>(null);
   const durationSeconds = useRef(0);
   const loadedAudioKey = useRef("");
-  const { voiceId, speakingRate, pitch, volume, playbackRate, preset, provider, running, autoplayChapterId } = useTtsSession();
+  const { voiceId, speakingRate, pitch, volume, playbackRate, preset, provider, running, speechPlaying, autoplayChapterId } = useTtsSession();
   const setVoiceId = (voiceId: string) => useTtsSession.setState({ voiceId });
   const setSpeakingRate = (speakingRate: number) => useTtsSession.setState({ speakingRate });
   const setPitch = (pitch: number) => useTtsSession.setState({ pitch });
@@ -44,6 +44,7 @@ export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChang
   const chunks = useQuery({ queryKey: ["tts-chunks", chapterId], queryFn: () => getTtsChunks(chapterId) });
   const resume = resumePoint(chunks.data ?? [], initialPosition ?? 0);
   const displayedIndex = chunkIndex < 0 ? resume.index : chunkIndex;
+  const liveReading = running && chunkIndex >= 0;
   const audioReady = !voices.isLoading && !chunks.isLoading && initialPosition !== undefined;
 
   useEffect(() => {
@@ -165,12 +166,12 @@ export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChang
 
   function trimAudioBuffer(index: number, settings: string) {
     for (const [key, entry] of bufferedAudio.current) {
-      if (Math.abs(entry.index - index) <= 1 && (entry.settings === settings || key === activeAudioKey.current)) continue;
+      if (Math.abs(entry.index - index) <= 2 && (entry.settings === settings || key === activeAudioKey.current)) continue;
       URL.revokeObjectURL(entry.url);
       bufferedAudio.current.delete(key);
     }
     for (const [key, entry] of pendingAudio.current) {
-      if (Math.abs(entry.index - index) <= 1 && entry.settings === settings) continue;
+      if (Math.abs(entry.index - index) <= 2 && entry.settings === settings) continue;
       entry.controller.abort();
       pendingAudio.current.delete(key);
     }
@@ -192,10 +193,9 @@ export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChang
     });
   }
 
-  async function prefetchNext(index: number) {
-    const request = chunkRequest(index + 1);
+  async function prefetchChunk(index: number, activeChunkIndex: number, version: number) {
+    const request = chunkRequest(index);
     if (!request) return;
-    const version = settingsVersion.current;
     await queryClient.prefetchQuery({
       queryKey: request.queryKey,
       queryFn: () => generateTts(request.payload),
@@ -203,24 +203,32 @@ export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChang
       gcTime: ttsAudioCacheTime,
       retry: false,
     });
-    if (version !== settingsVersion.current || index !== activeIndex.current) return;
+    if (version !== settingsVersion.current || activeChunkIndex !== activeIndex.current) return;
     const response = queryClient.getQueryData<TtsGenerateResponse>(request.queryKey);
     if (!response || bufferedAudio.current.has(request.audioKey) || pendingAudio.current.has(request.audioKey)) return;
 
     const controller = new AbortController();
-    pendingAudio.current.set(request.audioKey, { index: index + 1, settings: request.settings, controller });
+    pendingAudio.current.set(request.audioKey, { index, settings: request.settings, controller });
     try {
       const audio = await fetch(apiUrl(response.audioUrl), { signal: controller.signal });
       if (!audio.ok) return;
       const blob = await audio.blob();
-      if (controller.signal.aborted || version !== settingsVersion.current || index !== activeIndex.current) return;
-      bufferedAudio.current.set(request.audioKey, { index: index + 1, settings: request.settings, url: URL.createObjectURL(blob) });
-      trimAudioBuffer(index, request.settings);
+      if (controller.signal.aborted || version !== settingsVersion.current || activeChunkIndex !== activeIndex.current) return;
+      bufferedAudio.current.set(request.audioKey, { index, settings: request.settings, url: URL.createObjectURL(blob) });
+      trimAudioBuffer(activeChunkIndex, request.settings);
     } catch {
       // The next chunk can still be streamed from its URL when playback advances.
     } finally {
       if (pendingAudio.current.get(request.audioKey)?.controller === controller) pendingAudio.current.delete(request.audioKey);
     }
+  }
+
+  async function prefetchNext(index: number) {
+    const version = settingsVersion.current;
+    await Promise.allSettled([
+      prefetchChunk(index + 1, index, version),
+      prefetchChunk(index + 2, index, version),
+    ]);
   }
 
   async function play(index: number, auto = false) {
@@ -292,7 +300,7 @@ export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChang
 
   return <div className={`tts-player font-sans text-sm ${chunkIndex < 0 && !running ? "player-idle" : ""}`}>
     <div className="player-actions">
-      <button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={displayedIndex === 0} aria-label="Đoạn trước" onClick={playPrevious}><Icon name="left" /></button><button className="primary-button disabled:opacity-50" disabled={isGenerating} onClick={() => void play(displayedIndex)}>{isGenerating ? "Đang tạo…" : <><Icon name="play" /> Đọc</>}</button><button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={displayedIndex >= chunks.data.length - 1} aria-label="Đoạn sau" onClick={() => playNext()}><Icon name="right" /></button>
+      <button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={displayedIndex === 0} aria-label="Đoạn trước" onClick={playPrevious}><Icon name="left" /></button><button className="primary-button disabled:opacity-50" disabled={isGenerating} aria-label={isGenerating ? undefined : liveReading ? (speechPlaying ? "Tạm dừng" : "Tiếp tục") : "Đọc"} onClick={() => { if (liveReading) { const audio = audioRef.current; if (audio?.paused) void audio.play(); else audio?.pause(); } else void play(displayedIndex); }}>{isGenerating ? "Đang tạo…" : liveReading ? (speechPlaying ? <><Icon name="pause" /> Tạm dừng</> : <><Icon name="play" /> Tiếp tục</>) : <><Icon name="play" /> Đọc</>}</button><button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={displayedIndex >= chunks.data.length - 1} aria-label="Đoạn sau" onClick={() => playNext()}><Icon name="right" /></button>
       <button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={!running} onClick={stop}><Icon name="stop" /> Dừng</button>
       <span className="voice-caption">{selectedVoiceInfo?.name}</span>
     </div>

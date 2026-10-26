@@ -3,16 +3,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createBookmark, deleteBookmark, getBook, getBookmarks, getChapter, getProgress, saveProgress, TtsChunk, type ReadingProgress } from "../lib/api";
 import { Icon } from "./Icon";
 import { AtmosphereControls } from "./ReadingAtmosphere";
 import { TtsPlayer } from "./TtsPlayer";
-import { readingThemes, useReadingPreferences, useReaderSession } from "../lib/reading-preferences";
+import { defaultPreferences, readingThemes, useReadingPreferences, useReaderSession } from "../lib/reading-preferences";
 import { characterRange, scrollToCharacter, visibleCharacter } from "../lib/reader-position";
 import { useTtsSession } from "../lib/tts-session";
 
-function highlightedText(text: string, chunks: TtsChunk[], activeChunk: number | null): ReactNode[] {
+function highlightedText(text: string, chunks: TtsChunk[], activeChunk: number | null, reveal: number): ReactNode[] {
   const nodes: ReactNode[] = [];
   let cursor = 0;
   chunks.forEach((chunk) => {
@@ -21,7 +21,8 @@ function highlightedText(text: string, chunks: TtsChunk[], activeChunk: number |
     if (start > cursor) nodes.push(<span key={`text-${cursor}`}>{text.slice(cursor, start)}</span>);
     if (end > start) {
       const isActive = activeChunk === chunk.chunkIndex;
-      nodes.push(<mark className={isActive ? "reading-highlight scroll-mt-28" : "rounded bg-transparent text-inherit"} key={`chunk-${chunk.chunkIndex}`}>{text.slice(start, end)}</mark>);
+      const split = isActive ? Math.max(start, Math.min(end, reveal)) : end;
+      nodes.push(<mark className={isActive ? "reading-highlight scroll-mt-28" : "rounded bg-transparent text-inherit"} key={`chunk-${chunk.chunkIndex}`}>{text.slice(start, split)}{split < end && <span className="reading-pending">{text.slice(split, end)}</span>}</mark>);
     }
     cursor = Math.max(cursor, end);
   });
@@ -29,13 +30,45 @@ function highlightedText(text: string, chunks: TtsChunk[], activeChunk: number |
   return nodes;
 }
 
-function chapterParagraphs(text: string, chunk: TtsChunk | null) {
+// Memoised so only paragraphs touched by the active chunk re-render while the typewriter advances.
+const Paragraph = memo(function Paragraph({ part, start, chunk, reveal }: { part: string; start: number; chunk: TtsChunk | null; reveal: number }) {
+  const local = chunk ? [{ ...chunk, startCharacter: chunk.startCharacter - start, endCharacter: chunk.endCharacter - start }] : [];
+  return <span data-start={start} data-end={start + part.length}>{highlightedText(part, local, chunk?.chunkIndex ?? null, reveal - start)}</span>;
+});
+
+function chapterParagraphs(text: string, chunk: TtsChunk | null, reveal: number) {
   let offset = 0;
   return (text.match(/[^\n]*\n|[^\n]+$/g) ?? []).map((part) => {
     const start = offset; offset += part.length;
-    const local = chunk ? [{ ...chunk, startCharacter: chunk.startCharacter - start, endCharacter: chunk.endCharacter - start }] : [];
-    return <span key={start} data-start={start} data-end={offset}>{highlightedText(part, local, chunk?.chunkIndex ?? null)}</span>;
+    const touched = chunk && chunk.startCharacter < offset && chunk.endCharacter > start;
+    return <Paragraph key={start} part={part} start={start} chunk={touched ? chunk : null} reveal={touched ? reveal : 0} />;
   });
+}
+
+// Reveals the active TTS chunk word by word, paced by the playing audio.
+function useTypewriter(chunk: TtsChunk | null, text: string | undefined) {
+  const speaking = useTtsSession((state) => state.speechPlaying);
+  const [reveal, setReveal] = useState({ index: -1, end: 0 });
+  useEffect(() => {
+    if (!chunk || text === undefined) return;
+    const done = () => setReveal({ index: chunk.chunkIndex, end: chunk.endCharacter });
+    if (!speaking || window.matchMedia("(prefers-reduced-motion: reduce)").matches) { done(); return; }
+    let frame = 0;
+    const tick = () => {
+      const audio = document.querySelector("audio");
+      const length = chunk.endCharacter - chunk.startCharacter;
+      if (audio && Number.isFinite(audio.duration) && audio.duration > 0 && length > 0) {
+        let end = chunk.startCharacter + Math.floor(Math.min(1, audio.currentTime / audio.duration) * length);
+        while (end < chunk.endCharacter && !/\s/.test(text[end] ?? " ")) end++;
+        setReveal((previous) => previous.index === chunk.chunkIndex && previous.end === end ? previous : { index: chunk.chunkIndex, end });
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    setReveal({ index: chunk.chunkIndex, end: chunk.startCharacter });
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [chunk, speaking, text]);
+  return chunk && reveal.index === chunk.chunkIndex ? reveal.end : chunk?.endCharacter ?? 0;
 }
 
 export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId: string }) {
@@ -80,6 +113,7 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
     }),
   });
   const chapterText = chapterQuery.data?.plainText;
+  const revealEnd = useTypewriter(ttsChunk, chapterText);
   const chapters = bookQuery.data?.chapters ?? [];
   const chapterIndex = chapters.findIndex((chapter) => chapter.id === chapterId);
   const previousChapter = chapters[chapterIndex - 1];
@@ -298,9 +332,10 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
   const settings = <div className="reader-settings">
     <span className="text-muted">Giao diện</span><div className="theme-options" role="group" aria-label="Theme giao diện">{readingThemes.map((option) => <button className="theme-option" aria-pressed={theme === option.id} key={option.id} onClick={() => useReadingPreferences.setState({ theme: option.id })}><span className="theme-swatch" aria-hidden="true" style={{ backgroundColor: option.color }} />{option.name}</button>)}</div>
     <label>Font chữ <select aria-label="Font chữ" value={font} onChange={(e) => useReadingPreferences.setState({ font: e.target.value as "sans" | "serif" })}><option value="sans">Sans · Arial</option><option value="serif">Serif · Source Serif 4</option></select></label>
-    <label>Cỡ chữ <input aria-label="Cỡ chữ" type="range" min="16" max="28" step="1" value={fontSize} onChange={(e) => useReadingPreferences.setState({ fontSize: Number(e.target.value) })} /> {fontSize}px</label>
+    <label>Cỡ chữ <span className="size-stepper"><button aria-label="Giảm cỡ chữ" disabled={fontSize <= 16} onClick={() => useReadingPreferences.setState({ fontSize: fontSize - 1 })}><Icon name="minus" /></button><input aria-label="Cỡ chữ" type="range" min="16" max="28" step="1" value={fontSize} onChange={(e) => useReadingPreferences.setState({ fontSize: Number(e.target.value) })} /><button aria-label="Tăng cỡ chữ" disabled={fontSize >= 28} onClick={() => useReadingPreferences.setState({ fontSize: fontSize + 1 })}><Icon name="plus" /></button></span> {fontSize}px</label>
     <label>Giãn dòng <input aria-label="Giãn dòng" type="range" min="1.5" max="2.2" step="0.1" value={lineHeight} onChange={(e) => useReadingPreferences.setState({ lineHeight: Number(e.target.value) })} /> {lineHeight}</label>
     <label>Độ rộng dòng <select aria-label="Độ rộng dòng" value={columnWidth} onChange={(e) => useReadingPreferences.setState({ columnWidth: Number(e.target.value) as 60 | 68 | 75 })}>{[60,68,75].map((width) => <option key={width} value={width}>{width} ký tự</option>)}</select></label>
+    <button className="settings-reset" onClick={() => { const { font, fontSize, lineHeight, columnWidth } = defaultPreferences; useReadingPreferences.setState({ font, fontSize, lineHeight, columnWidth }); }}>Đặt lại cỡ chữ, giãn dòng, độ rộng</button>
     <p className="subtle" role="status">{syncStatus === "saved" ? "Đã đồng bộ tùy chỉnh" : syncStatus === "offline" ? "Đang dùng cấu hình trên máy · sẽ đồng bộ khi có kết nối" : "Đang đồng bộ tùy chỉnh…"}</p>
   </div>;
 
@@ -323,12 +358,12 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
       {bookmarkMutation.isError && <p className="error-message" role="alert">Không lưu được dấu trang.</p>}
       {showHint && <p className="reader-tools subtle mt-3">Dùng nút Tập trung hoặc phím F để ẩn điều khiển. Chạm vào chữ vẫn chọn văn bản bình thường. <button aria-label="Ẩn gợi ý tập trung" onClick={() => { localStorage.setItem("gac-sach-focus-hint", "seen"); setShowHint(false); }}>Đã hiểu</button></p>}
       <p className="reader-estimate subtle mt-4">{percent}% chương · {bookPercent}% cả sách · Còn khoảng {remainingMinutes} phút đọc</p>
-      <div ref={textContainerRef} className="reader-text mt-8 whitespace-pre-line" style={{ fontFamily: "inherit", lineHeight }}>{chapterParagraphs(chapterQuery.data.plainText, ttsChunk)}</div>
+      <div ref={textContainerRef} className="reader-text mt-8 whitespace-pre-line" style={{ fontFamily: "inherit", lineHeight }}>{chapterParagraphs(chapterQuery.data.plainText, ttsChunk, revealEnd)}</div>
       <footer className="reader-tools mt-14 flex justify-between border-t border-current/10 pb-40 pt-5 text-sm"><button disabled={!previousChapter} onClick={() => previousChapter && selectChapter(previousChapter.id)}>← Chương trước</button><button disabled={!nextChapter} onClick={() => nextChapter && selectChapter(nextChapter.id)}>Chương sau →</button></footer>
     </article>
     <nav className="mobile-reader-bar" aria-label="Điều khiển đọc"><button onClick={(e) => openToc(e.currentTarget)}>Mục lục</button><button aria-label="Tùy chỉnh chữ và không gian" popoverTarget="reader-preferences">Aa</button><button onClick={toggleFocus}>{focus ? "Thoát tập trung" : "Tập trung"}</button>{reading && <button onClick={stopReading}>Dừng đọc</button>}</nav>
     {focus && <div className="focus-controls"><button onClick={toggleFocus}>Thoát tập trung</button>{reading && <button onClick={stopReading}>Dừng đọc</button>}</div>}
-    <div id="reader-preferences" ref={settingsRef} popover="auto" className="reader-settings-popover" aria-label="Tùy chỉnh chữ và không gian"><div className="drawer-header"><h2>Chữ & không gian</h2><button autoFocus aria-label="Đóng tùy chỉnh" onClick={() => settingsRef.current?.hidePopover()}><Icon name="close" /></button></div>{settings}<AtmosphereControls /></div>
+    <div id="reader-preferences" ref={settingsRef} popover="auto" className="reader-settings-popover" aria-label="Tùy chỉnh chữ và không gian"><div className="drawer-header"><h2>Chữ & không gian</h2><button autoFocus aria-label="Đóng tùy chỉnh" onClick={() => settingsRef.current?.hidePopover()}><Icon name="close" /></button></div>{settings}<AtmosphereControls /><p className="subtle shortcut-hint">Phím tắt: F tập trung · T mục lục · D đổi giao diện · ← → đổi chương</p></div>
     <dialog ref={dialogRef} className="chapter-drawer" aria-labelledby="toc-title" onClose={() => tocTrigger.current?.focus()}><div className="drawer-header"><h2 id="toc-title">Mục lục & dấu trang</h2><button aria-label="Đóng mục lục" onClick={() => dialogRef.current?.close()}>Đóng</button></div><p className="subtle">{bookQuery.data.title}</p><div className="drawer-switch" role="group" aria-label="Nội dung điều hướng"><button aria-pressed={drawerView === "chapters"} onClick={() => setDrawerView("chapters")}>Chương</button><button aria-pressed={drawerView === "bookmarks"} onClick={() => setDrawerView("bookmarks")}>Dấu trang ({bookmarksQuery.data?.length ?? 0})</button></div>{drawerView === "chapters" ? <><label className="block mt-5">Tìm chương<input className="chapter-search" aria-label="Tìm chương" value={chapterSearch} onChange={(e) => setChapterSearch(e.target.value)} /></label><ol className="chapter-list">{chapters.filter((chapter) => fold(chapter.title).includes(fold(chapterSearch))).map((chapter) => <li key={chapter.id}><button aria-current={chapter.id === chapterId ? "page" : undefined} onClick={() => selectChapter(chapter.id)}><span>{chapter.chapterNumber}. {chapter.title}</span><span className="subtle">{chapter.id === progressQuery.data?.chapterId ? "Đọc tới đây" : chapter.id === chapterId ? "Đang mở" : ""}</span></button></li>)}</ol></> : <div className="bookmark-list">
       {bookmarksQuery.isLoading && <p role="status">Đang tải dấu trang…</p>}
       {bookmarksQuery.isError && <p className="error-message" role="alert">Không tải được dấu trang.</p>}
