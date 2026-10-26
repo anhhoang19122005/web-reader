@@ -71,7 +71,13 @@ if (Test-Path -LiteralPath $statePath) {
 if (-not $tunnelUrl) {
     $log = Join-Path $work "tunnel-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds()).log"
     $cloudflared = (Get-Command cloudflared -ErrorAction Stop).Source
-    $tunnel = Start-Process -FilePath $cloudflared -ArgumentList @('tunnel', '--protocol', 'http2', '--url', $localApiUrl) -WindowStyle Hidden -PassThru -RedirectStandardError $log -RedirectStandardOutput "$log.stdout"
+    # A user's named-tunnel config may contain a catch-all 404 ingress. Isolate
+    # this account-less Quick Tunnel so its hostname forwards to the local API.
+    $quickTunnelConfig = Join-Path $work 'quick-tunnel-config.yml'
+    if (-not (Test-Path -LiteralPath $quickTunnelConfig)) {
+        Set-Content -LiteralPath $quickTunnelConfig -Value 'no-autoupdate: true' -Encoding ascii
+    }
+    $tunnel = Start-Process -FilePath $cloudflared -ArgumentList @('tunnel', '--config', $quickTunnelConfig, '--url', $localApiUrl) -WindowStyle Hidden -PassThru -RedirectStandardError $log -RedirectStandardOutput "$log.stdout"
     for ($i = 0; $i -lt 45; $i++) {
         Start-Sleep -Seconds 1
         if (Test-Path -LiteralPath $log) {
