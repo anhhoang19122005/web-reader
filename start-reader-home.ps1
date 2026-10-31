@@ -73,10 +73,9 @@ if (-not $tunnelUrl) {
     $cloudflared = (Get-Command cloudflared -ErrorAction Stop).Source
     # A user's named-tunnel config may contain a catch-all 404 ingress. Isolate
     # this account-less Quick Tunnel so its hostname forwards to the local API.
-    $quickTunnelConfig = Join-Path $work 'quick-tunnel-config.yml'
-    if (-not (Test-Path -LiteralPath $quickTunnelConfig)) {
-        Set-Content -LiteralPath $quickTunnelConfig -Value 'no-autoupdate: true' -Encoding ascii
-    }
+    # Kept outside OneDrive: a cloud-only placeholder makes cloudflared time out reading it.
+    $quickTunnelConfig = Join-Path ([System.IO.Path]::GetTempPath()) 'reader-quick-tunnel-config.yml'
+    Set-Content -LiteralPath $quickTunnelConfig -Value 'no-autoupdate: true' -Encoding ascii
     $tunnel = Start-Process -FilePath $cloudflared -ArgumentList @('tunnel', '--config', $quickTunnelConfig, '--url', $localApiUrl) -WindowStyle Hidden -PassThru -RedirectStandardError $log -RedirectStandardOutput "$log.stdout"
     for ($i = 0; $i -lt 45; $i++) {
         Start-Sleep -Seconds 1
