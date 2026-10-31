@@ -245,3 +245,40 @@ option,optgroup { color:var(--foreground); background:var(--surface); }
 .moment-blood::before { box-shadow:inset 0 0 140px 40px rgba(170,10,40,.55); animation:moment-heartbeat 2.4s ease-out both; }
 @keyframes moment-heartbeat { 0% { opacity:0; } 12% { opacity:1; } 22% { opacity:.4; } 32% { opacity:.9; } 100% { opacity:0; } }
 @media(prefers-reduced-motion:reduce) { [data-moment-seen] { animation:none; } .moment-layer { display:none; } }
+
+/* Colour and depth: aurora backdrop, 3D book covers, floating cards, pressable buttons. */
+:root { --aurora-a:#7c5cff; --aurora-b:#ff6fa5; --aurora-c:#2fb8d6; --depth-shadow:0 1px 2px rgb(0 0 0 / .06),0 8px 24px -6px rgb(0 0 0 / .14); --depth-shadow-hover:0 2px 4px rgb(0 0 0 / .08),0 22px 40px -12px rgb(0 0 0 / .28); }
+:root:is([data-theme="dark"],[data-theme="forest"],[data-theme="sunset"]) { --aurora-a:#9a7bff; --aurora-b:#ff5c9a; --aurora-c:#22c3e6; --aurora-strength:30%; --depth-shadow:0 1px 2px rgb(0 0 0 / .3),0 10px 28px -6px rgb(0 0 0 / .5); --depth-shadow-hover:0 2px 4px rgb(0 0 0 / .35),0 24px 44px -12px rgb(0 0 0 / .65); }
+.app-surface { background:
+  radial-gradient(60rem 36rem at 0% -10%,color-mix(in srgb,var(--aurora-a) var(--aurora-strength,20%),transparent),transparent 70%),
+  radial-gradient(50rem 30rem at 100% 0%,color-mix(in srgb,var(--aurora-b) calc(var(--aurora-strength,20%) * .8),transparent),transparent 70%),
+  radial-gradient(60rem 40rem at 50% 110%,color-mix(in srgb,var(--aurora-c) calc(var(--aurora-strength,20%) * .7),transparent),transparent 70%),
+  radial-gradient(40rem 30rem at 80% 60%,color-mix(in srgb,var(--accent) 14%,transparent),transparent 70%),
+  var(--background); background-attachment:fixed; }
+.reading-surface { background:radial-gradient(70rem 22rem at 50% -8rem,color-mix(in srgb,var(--aurora-a) 9%,transparent),transparent 75%),var(--background); }
+.site-header { background:color-mix(in srgb,var(--surface) 72%,transparent); backdrop-filter:blur(14px) saturate(1.4); border-bottom:1px solid transparent; border-image:linear-gradient(90deg,transparent,var(--aurora-a),var(--aurora-b),var(--aurora-c),transparent) 1; }
+.wordmark { background:linear-gradient(100deg,var(--accent),color-mix(in oklch,var(--accent) 45%,var(--aurora-a))); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.section-title { background:linear-gradient(100deg,var(--foreground) 30%,color-mix(in oklch,var(--accent) 60%,var(--aurora-b))); -webkit-background-clip:text; background-clip:text; color:transparent; }
+
+.primary-button { background:linear-gradient(160deg,color-mix(in oklch,var(--accent) 80%,white),var(--accent) 45%,color-mix(in oklch,var(--accent) 70%,var(--aurora-a))); box-shadow:0 3px 0 color-mix(in srgb,var(--accent) 60%,black),0 8px 18px -6px color-mix(in srgb,var(--accent) 70%,transparent),inset 0 1px 0 rgb(255 255 255 / .35); transition:transform 120ms ease-out,box-shadow 120ms ease-out,filter 180ms ease-out; }
+.primary-button:hover { filter:brightness(1.06) saturate(1.1); transform:translateY(-1px); }
+.primary-button:active { transform:translateY(2px); box-shadow:0 1px 0 color-mix(in srgb,var(--accent) 60%,black),0 3px 8px -4px color-mix(in srgb,var(--accent) 70%,transparent),inset 0 1px 0 rgb(255 255 255 / .25); }
+
+.continue-book,.upload-zone,.reader-dock { border-radius:18px; background:color-mix(in srgb,var(--surface) 82%,transparent); backdrop-filter:blur(10px); box-shadow:var(--depth-shadow); }
+.continue-book { position:relative; margin-top:28px; padding:28px; border:1px solid color-mix(in srgb,var(--accent) 25%,var(--line)); }
+.continue-book::before { content:""; position:absolute; inset:-1px; border-radius:inherit; padding:1px; background:linear-gradient(120deg,var(--aurora-a),var(--aurora-b),var(--aurora-c)); -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; pointer-events:none; opacity:.7; }
+.upload-zone { border-style:dashed; border-color:color-mix(in srgb,var(--accent) 35%,var(--line)); }
+.shelf-grid .book-row { background:color-mix(in srgb,var(--surface) 78%,transparent); border:1px solid color-mix(in srgb,var(--book-color) 18%,var(--line)); border-radius:18px; box-shadow:var(--depth-shadow); transition:transform 260ms cubic-bezier(.2,.8,.2,1),box-shadow 260ms ease-out,background-color 180ms ease-out,border-color 180ms ease-out; }
+@media(hover:hover) { .shelf-grid .book-row:hover { transform:translateY(-4px); box-shadow:var(--depth-shadow-hover),0 14px 34px -14px var(--book-color); } }
+.shelf-grid .book-row:nth-child(5n + 5) { --book-color:oklch(55% .16 295); }
+.book-progress span { background:linear-gradient(90deg,var(--book-color,var(--accent)),color-mix(in oklch,var(--book-color,var(--accent)) 55%,var(--aurora-b))); }
+
+/* 3D book: tilted cover, spine fold, page edges and a sheen; turns further on hover. */
+.book-link,.continue-book,.book-hero { perspective:900px; }
+.book-cover { --cover:var(--book-color,var(--accent)); position:relative; transform-style:preserve-3d; transform:rotateY(-14deg); transition:transform 420ms cubic-bezier(.2,.8,.2,1); background:linear-gradient(135deg,color-mix(in oklch,var(--cover) 75%,white),var(--cover) 45%,color-mix(in oklch,var(--cover) 70%,black)); box-shadow:inset 7px 0 6px -3px rgb(0 0 0 / .35),inset 9px 0 0 -7px rgb(255 255 255 / .35),10px 14px 24px -8px rgb(0 0 0 / .45); }
+.book-cover::before { content:""; position:absolute; inset:0; border-radius:inherit; background:linear-gradient(110deg,transparent 35%,rgb(255 255 255 / .28) 48%,transparent 60%); background-size:250% 100%; background-position:100% 0; transition:background-position 600ms ease-out; pointer-events:none; }
+.book-cover::after { content:""; position:absolute; top:3%; right:0; width:14px; height:94%; transform-origin:right center; transform:rotateY(90deg); background:repeating-linear-gradient(90deg,#f4efe4 0 2px,#d9d2c3 2px 3px); box-shadow:inset 0 0 6px rgb(0 0 0 / .25); }
+.book-cover img { position:relative; border-radius:2px 6px 6px 2px; box-shadow:inset 6px 0 6px -3px rgb(0 0 0 / .35); }
+@media(hover:hover) { .book-link:hover .book-cover,.continue-book:hover .book-cover { transform:rotateY(-28deg) translateY(-4px); } .book-link:hover .book-cover::before,.continue-book:hover .book-cover::before { background-position:0 0; } }
+.book-link:focus-visible .book-cover { transform:rotateY(-28deg); }
+@media(prefers-reduced-motion:reduce) { .book-cover,.shelf-grid .book-row,.primary-button { transition:none; } }
