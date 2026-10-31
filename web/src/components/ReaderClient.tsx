@@ -49,10 +49,9 @@ function chapterParagraphs(text: string, chunk: TtsChunk | null, reveal: number)
 function useTypewriter(chunk: TtsChunk | null, text: string | undefined) {
   const speaking = useTtsSession((state) => state.speechPlaying);
   const [reveal, setReveal] = useState({ index: -1, end: 0 });
+  const animate = speaking && typeof window !== "undefined" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   useEffect(() => {
-    if (!chunk || text === undefined) return;
-    const done = () => setReveal({ index: chunk.chunkIndex, end: chunk.endCharacter });
-    if (!speaking || window.matchMedia("(prefers-reduced-motion: reduce)").matches) { done(); return; }
+    if (!chunk || text === undefined || !animate) return;
     let frame = 0;
     const tick = () => {
       const audio = document.querySelector("audio");
@@ -64,11 +63,13 @@ function useTypewriter(chunk: TtsChunk | null, text: string | undefined) {
       }
       frame = requestAnimationFrame(tick);
     };
-    setReveal({ index: chunk.chunkIndex, end: chunk.startCharacter });
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [chunk, speaking, text]);
-  return chunk && reveal.index === chunk.chunkIndex ? reveal.end : chunk?.endCharacter ?? 0;
+  }, [chunk, animate, text]);
+  if (!chunk) return 0;
+  if (!animate) return chunk.endCharacter;
+  // A new chunk starts hidden until the first audio frame reports progress.
+  return reveal.index === chunk.chunkIndex ? reveal.end : chunk.startCharacter;
 }
 
 export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId: string }) {
