@@ -344,11 +344,13 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
   const bookmarkPosition = viewPosition;
   const bookPercent = chapters.length ? Math.round((Math.max(0, chapterIndex) + percent / 100) / chapters.length * 100) : 0;
   const fold = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g,"d").replace(/Đ/g,"D").toLowerCase();
+  // Imported text usually repeats the title; keep it in the text so TTS offsets stay intact.
+  const titleInText = chapterQuery.data.plainText.startsWith(chapterQuery.data.title.trim());
   return <main className={`min-h-screen reading-surface reader-page ${focus ? "reader-focus" : ""}`}>
     <header className="site-header sticky top-0 z-20 reader-header"><Link className="wordmark" href={`/library/${bookId}`}>Gác Sách</Link><div className="flex items-center gap-3"><button onClick={(e) => openToc(e.currentTarget)}>Mục lục</button><button aria-label="Tùy chỉnh chữ và không gian" popoverTarget="reader-preferences">Aa</button><button onClick={toggleFocus}>Tập trung</button></div></header>
     <div className="chapter-progress" role="progressbar" aria-label="Tiến độ chương" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><span style={{ width: `${percent}%` }} /></div>
     <article className="reader-column px-6 py-8 md:px-8" style={{ maxWidth: `calc(${columnWidth}ch + 4rem)`, fontSize, fontFamily: font === "serif" ? "var(--font-reader-serif), Georgia, serif" : "Arial, Helvetica, sans-serif" }}>
-      <div className="reader-title"><p className="text-sm text-muted">{bookQuery.data.author}</p><h1 className="mt-2 text-3xl font-semibold md:text-4xl">{chapterQuery.data.title}</h1></div>
+      <div className="reader-title"><p className="text-sm text-muted">{bookQuery.data.author}</p><h1 className={titleInText ? "sr-only" : "mt-2 text-3xl font-semibold md:text-4xl"}>{chapterQuery.data.title}</h1></div>
       <div ref={playerContainerRef} className="sticky top-16 z-10 mt-5 rounded-xl reader-dock reading-surface"><TtsPlayer onLayoutChange={() => { if (Date.now() > autoUntil.current) rememberView(); suppressSave(); }} key={`${chapterId}-${bookmarkResume?.chapterId === chapterId ? bookmarkResume.position : "default"}`} chapterId={chapterId} initialPosition={progressQuery.isLoading ? undefined : bookmarkResume?.chapterId === chapterId ? bookmarkResume.position : bookmarkTarget !== null && Number.isInteger(Number(bookmarkTarget)) && Number(bookmarkTarget) >= 0 ? Number(bookmarkTarget) : progressQuery.data?.chapterId === chapterId ? progressQuery.data.characterPosition : 0} onProgress={handleTtsProgress} onChunkChange={handleTtsChunk} onComplete={() => {
         if (!useTtsSession.getState().running) return;
         if (nextChapter) selectChapter(nextChapter.id, true);
@@ -358,7 +360,7 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
       {bookmarkMutation.isError && <p className="error-message" role="alert">Không lưu được dấu trang.</p>}
       {showHint && <p className="reader-tools subtle mt-3">Dùng nút Tập trung hoặc phím F để ẩn điều khiển. Chạm vào chữ vẫn chọn văn bản bình thường. <button aria-label="Ẩn gợi ý tập trung" onClick={() => { localStorage.setItem("gac-sach-focus-hint", "seen"); setShowHint(false); }}>Đã hiểu</button></p>}
       <p className="reader-estimate subtle mt-4">{percent}% chương · {bookPercent}% cả sách · Còn khoảng {remainingMinutes} phút đọc</p>
-      <div ref={textContainerRef} className="reader-text mt-8 whitespace-pre-line" style={{ fontFamily: "inherit", lineHeight }}>{chapterParagraphs(chapterQuery.data.plainText, ttsChunk, revealEnd)}</div>
+      <div ref={textContainerRef} className={`reader-text whitespace-pre-line ${titleInText ? "title-in-text mt-2" : "mt-8"}`} style={{ fontFamily: "inherit", lineHeight }}>{chapterParagraphs(chapterQuery.data.plainText, ttsChunk, revealEnd)}</div>
       <footer className="reader-tools mt-14 flex justify-between border-t border-current/10 pb-40 pt-5 text-sm"><button disabled={!previousChapter} onClick={() => previousChapter && selectChapter(previousChapter.id)}>← Chương trước</button><button disabled={!nextChapter} onClick={() => nextChapter && selectChapter(nextChapter.id)}>Chương sau →</button></footer>
     </article>
     <nav className="mobile-reader-bar" aria-label="Điều khiển đọc"><button onClick={(e) => openToc(e.currentTarget)}>Mục lục</button><button aria-label="Tùy chỉnh chữ và không gian" popoverTarget="reader-preferences">Aa</button><button onClick={toggleFocus}>{focus ? "Thoát tập trung" : "Tập trung"}</button>{reading && <button onClick={stopReading}>Dừng đọc</button>}</nav>
