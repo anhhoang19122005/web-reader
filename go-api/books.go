@@ -193,19 +193,54 @@ func (a *App) listBooks(w http.ResponseWriter, r *http.Request) *apiError {
 		log.Printf("Deferred book cleanup: %v", err)
 	}
 	cancel()
-	cursor, err := a.collection(booksCollection).Find(r.Context(), bson.M{"userId": singleUserID, "deletedAt": nil}, options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}}))
+	ctx := r.Context()
+	// Legacy embedded chapters are only counted here, so skip their text.
+	cursor, err := a.collection(booksCollection).Find(ctx, bson.M{"userId": singleUserID, "deletedAt": nil}, options.Find().
+		SetSort(bson.D{{Key: "createdAt", Value: -1}}).
+		SetProjection(bson.M{"chapters.plainText": 0, "chapters.contentHtml": 0}))
 	if err != nil {
 		return databaseError(err)
 	}
-	defer cursor.Close(r.Context())
+	documents := []mongoBook{}
+	if err := cursor.All(ctx, &documents); err != nil {
+		return databaseError(err)
+	}
+	bookIDs := make([]string, len(documents))
+	for i, document := range documents {
+		bookIDs[i] = document.ID
+	}
+	progressByBook := map[string]mongoProgress{}
+	progressCursor, err := a.collection(progressCollection).Find(ctx, bson.M{"userId": singleUserID, "bookId": bson.M{"$in": bookIDs}})
+	if err != nil {
+		return databaseError(err)
+	}
+	progressDocuments := []mongoProgress{}
+	if err := progressCursor.All(ctx, &progressDocuments); err != nil {
+		return databaseError(err)
+	}
+	chapterIDs := make([]string, 0, len(progressDocuments))
+	for _, progress := range progressDocuments {
+		progressByBook[progress.BookID] = progress
+		chapterIDs = append(chapterIDs, progress.ChapterID)
+	}
+	// plainText is still needed for the UTF-16 length progress is measured in.
+	chapterCursor, err := a.collection(chapterCollection).Find(ctx, bson.M{"id": bson.M{"$in": chapterIDs}},
+		options.Find().SetProjection(bson.M{"_id": 0, "id": 1, "bookId": 1, "chapterNumber": 1, "title": 1, "plainText": 1}))
+	if err != nil {
+		return databaseError(err)
+	}
+	chapterDocuments := []mongoChapter{}
+	if err := chapterCursor.All(ctx, &chapterDocuments); err != nil {
+		return databaseError(err)
+	}
+	chaptersByID := map[string]mongoChapter{}
+	for _, chapter := range chapterDocuments {
+		chaptersByID[chapter.ID] = chapter
+	}
 	books := []bookSummary{}
-	for cursor.Next(r.Context()) {
-		var document mongoBook
-		if err := cursor.Decode(&document); err != nil {
-			return databaseError(err)
-		}
+	for _, document := range documents {
 		if document.ChapterCount == 0 {
-			count, err := a.collection(chapterCollection).CountDocuments(r.Context(), bson.M{"bookId": document.ID})
+			count, err := a.collection(chapterCollection).CountDocuments(ctx, bson.M{"bookId": document.ID})
 			if err != nil {
 				return databaseError(err)
 			}
@@ -213,7 +248,7 @@ func (a *App) listBooks(w http.ResponseWriter, r *http.Request) *apiError {
 			if count == 0 {
 				document.ChapterCount = len(document.Chapters)
 			}
-			if _, err := a.collection(booksCollection).UpdateOne(r.Context(), bson.M{"_id": document.ID, "userId": singleUserID}, bson.M{"$set": bson.M{"chapterCount": document.ChapterCount}}); err != nil {
+			if _, err := a.collection(booksCollection).UpdateOne(ctx, bson.M{"_id": document.ID, "userId": singleUserID}, bson.M{"$set": bson.M{"chapterCount": document.ChapterCount}}); err != nil {
 				return databaseError(err)
 			}
 		}
@@ -222,19 +257,22 @@ func (a *App) listBooks(w http.ResponseWriter, r *http.Request) *apiError {
 			return databaseError(err)
 		}
 		book := bookSummary{ID: id, Title: document.Title, Author: document.Author, FileType: document.FileType, HasCover: document.CoverStorageKey != "", ChapterCount: document.ChapterCount, CreatedAt: document.CreatedAt}
-		var progress mongoProgress
-		progressErr := a.collection(progressCollection).FindOne(r.Context(), bson.M{"userId": singleUserID, "bookId": document.ID}).Decode(&progress)
-		if progressErr == nil {
+		if progress, ok := progressByBook[document.ID]; ok {
 			book.LastReadAt = &progress.UpdatedAt
 			chapterID, err := mongoID(progress.ChapterID)
 			if err != nil {
 				return databaseError(err)
 			}
-			_, chapter, err := a.findChapter(r.Context(), id, chapterID)
-			if err != nil && !errorsIsNoRows(err) {
-				return databaseError(err)
+			chapter, found := chaptersByID[progress.ChapterID]
+			if !found || chapter.BookID != document.ID {
+				// Legacy books keep chapters embedded in the book document.
+				_, chapter, err = a.findChapter(ctx, id, chapterID)
+				if err != nil && !errorsIsNoRows(err) {
+					return databaseError(err)
+				}
+				found = err == nil
 			}
-			if err == nil {
+			if found {
 				book.ContinueChapterID = &chapterID
 				book.ContinueChapterNumber = chapter.ChapterNumber
 				book.ContinueChapterTitle = chapter.Title
@@ -244,13 +282,8 @@ func (a *App) listBooks(w http.ResponseWriter, r *http.Request) *apiError {
 				}
 				book.ProgressPercent = min(100, int((float64(chapter.ChapterNumber-1)+position)*100/float64(maxInt(1, document.ChapterCount))+0.5))
 			}
-		} else if !errorsIsNoRows(progressErr) {
-			return databaseError(progressErr)
 		}
 		books = append(books, book)
-	}
-	if err := cursor.Err(); err != nil {
-		return databaseError(err)
 	}
 	writeJSON(w, http.StatusOK, books)
 	return nil

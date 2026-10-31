@@ -15,8 +15,10 @@ func (a *App) Migrate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	_, err = a.collection(chapterCollection).Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.D{{Key: "bookId", Value: 1}, {Key: "chapterNumber", Value: 1}},
+	_, err = a.collection(chapterCollection).Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "bookId", Value: 1}, {Key: "chapterNumber", Value: 1}}},
+		// Audio and progress look chapters up by id alone.
+		{Keys: bson.D{{Key: "id", Value: 1}}},
 	})
 	if err != nil {
 		return err

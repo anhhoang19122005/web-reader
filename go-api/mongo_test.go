@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -71,19 +72,19 @@ func TestLibraryChapterCountAndProgress(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer a.Close()
-	bookID := uuid.New()
+	// A unique test database keeps listBooks' cleanup away from the real library.
+	a.db = a.client.Database("rpt_" + strings.ReplaceAll(uuid.NewString(), "-", ""))
 	defer func() {
 		cleanup, done := context.WithTimeout(context.Background(), 10*time.Second)
 		defer done()
-		for _, name := range []string{progressCollection, chapterCollection} {
-			if _, err := a.collection(name).DeleteMany(cleanup, bson.M{"bookId": bookID.String()}); err != nil {
-				t.Error(err)
-			}
-		}
-		if _, err := a.collection(booksCollection).DeleteOne(cleanup, bson.M{"_id": bookID.String()}); err != nil {
+		if err := a.db.Drop(cleanup); err != nil {
 			t.Error(err)
 		}
 	}()
+	if err := a.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	bookID := uuid.New()
 	parsed := parsedBook{Title: "library test", Chapters: []parsedChapter{{PlainText: "abcd"}, {PlainText: "abcd"}, {PlainText: "abcd"}}}
 	if err := a.insertBook(ctx, bookID, "", "", "EPUB", parsed); err != nil {
 		t.Fatal(err)
