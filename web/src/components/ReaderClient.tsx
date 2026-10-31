@@ -3,10 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createBookmark, deleteBookmark, getBook, getBookmarks, getChapter, getProgress, saveProgress, TtsChunk, type ReadingProgress } from "../lib/api";
 import { Icon } from "./Icon";
 import { AtmosphereControls } from "./ReadingAtmosphere";
+import { CultivationMoments } from "./CultivationMoments";
+import { momentKind } from "../lib/cultivation-moments";
 import { TtsPlayer } from "./TtsPlayer";
 import { defaultPreferences, readingThemes, useReadingPreferences, useReaderSession } from "../lib/reading-preferences";
 import { characterRange, scrollToCharacter, visibleCharacter } from "../lib/reader-position";
@@ -33,7 +35,8 @@ function highlightedText(text: string, chunks: TtsChunk[], activeChunk: number |
 // Memoised so only paragraphs touched by the active chunk re-render while the typewriter advances.
 const Paragraph = memo(function Paragraph({ part, start, chunk, reveal }: { part: string; start: number; chunk: TtsChunk | null; reveal: number }) {
   const local = chunk ? [{ ...chunk, startCharacter: chunk.startCharacter - start, endCharacter: chunk.endCharacter - start }] : [];
-  return <span data-start={start} data-end={start + part.length}>{highlightedText(part, local, chunk?.chunkIndex ?? null, reveal - start)}</span>;
+  const moment = useMemo(() => momentKind(part), [part]);
+  return <span data-start={start} data-end={start + part.length} data-moment={moment ?? undefined}>{highlightedText(part, local, chunk?.chunkIndex ?? null, reveal - start)}</span>;
 });
 
 function chapterParagraphs(text: string, chunk: TtsChunk | null, reveal: number) {
@@ -362,6 +365,7 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
       {showHint && <p className="reader-tools subtle mt-3">Dùng nút Tập trung hoặc phím F để ẩn điều khiển. Chạm vào chữ vẫn chọn văn bản bình thường. <button aria-label="Ẩn gợi ý tập trung" onClick={() => { localStorage.setItem("gac-sach-focus-hint", "seen"); setShowHint(false); }}>Đã hiểu</button></p>}
       <p className="reader-estimate subtle mt-4">{percent}% chương · {bookPercent}% cả sách · Còn khoảng {remainingMinutes} phút đọc</p>
       <div ref={textContainerRef} className={`reader-text whitespace-pre-line ${titleInText ? "title-in-text mt-2" : "mt-8"}`} style={{ fontFamily: "inherit", lineHeight }}>{chapterParagraphs(chapterQuery.data.plainText, ttsChunk, revealEnd)}</div>
+      <CultivationMoments containerRef={textContainerRef} text={chapterQuery.data.plainText} />
       <footer className="reader-tools mt-14 flex justify-between border-t border-current/10 pb-40 pt-5 text-sm"><button disabled={!previousChapter} onClick={() => previousChapter && selectChapter(previousChapter.id)}>← Chương trước</button><button disabled={!nextChapter} onClick={() => nextChapter && selectChapter(nextChapter.id)}>Chương sau →</button></footer>
     </article>
     <nav className="mobile-reader-bar" aria-label="Điều khiển đọc"><button onClick={(e) => openToc(e.currentTarget)}>Mục lục</button><button aria-label="Tùy chỉnh chữ và không gian" popoverTarget="reader-preferences">Aa</button><button onClick={toggleFocus}>{focus ? "Thoát tập trung" : "Tập trung"}</button>{reading && <button onClick={stopReading}>Dừng đọc</button>}</nav>

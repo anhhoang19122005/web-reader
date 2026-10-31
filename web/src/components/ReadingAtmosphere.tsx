@@ -60,7 +60,7 @@ export function ReadingAtmosphere() {
 }
 
 export function AtmosphereControls() {
-  const { leaves, sound, ambientVolume } = useReadingPreferences();
+  const { leaves, moments, sound, ambientVolume } = useReadingPreferences();
   const enabled = useAmbientSession((s) => s.enabled);
   const [error, setError] = useState("");
   async function toggle() {
@@ -72,6 +72,7 @@ export function AtmosphereControls() {
   }
   return <fieldset className="ambience-controls"><legend>Không gian đọc</legend>
     <label className="toggle-label"><input type="checkbox" checked={leaves} onChange={(e) => useReadingPreferences.setState({ leaves: e.target.checked })} /> Lá rơi nhẹ</label>
+    <label className="toggle-label"><input type="checkbox" checked={moments} onChange={(e) => useReadingPreferences.setState({ moments: e.target.checked })} /> Hiệu ứng ở đoạn gay cấn</label>
     <button type="button" aria-pressed={enabled} onClick={() => void toggle()}>{enabled ? "Tắt âm nền" : "Bật âm nền"}</button>
     <label>Âm nền <select aria-label="Loại âm nền" value={sound} onChange={(e) => {
       if (isAmbientSound(e.target.value)) useReadingPreferences.setState({ sound: e.target.value });
@@ -79,7 +80,7 @@ export function AtmosphereControls() {
       {ambientSounds.filter((item) => item.group === group).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
     </optgroup>)}</select></label>
     <label>Âm lượng nền <input aria-label="Âm lượng nền" type="range" min="0" max="0.3" step="0.01" value={ambientVolume} onChange={(e) => useReadingPreferences.setState({ ambientVolume: Number(e.target.value) })} /> {Math.round(ambientVolume * 100)}%</label>
-    <p className="subtle">Tự hạ âm khi giọng đọc phát. Hiệu ứng lá tuân theo cài đặt giảm chuyển động của thiết bị.</p>
+    <p className="subtle">Tự hạ âm khi giọng đọc phát. Hiệu ứng lá và đoạn gay cấn tuân theo cài đặt giảm chuyển động của thiết bị.</p>
     {error && <p role="alert">{error}</p>}
   </fieldset>;
 }

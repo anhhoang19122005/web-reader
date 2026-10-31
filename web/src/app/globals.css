@@ -218,3 +218,30 @@ option,optgroup { color:var(--foreground); background:var(--surface); }
 }
 .title-in-text > span:first-child { font-size:1.75em; font-weight:600; line-height:1.3; }
 @media(max-width:640px) { .reader-header > div { display:none; } }
+
+/* Cultivation moments: short effects when a dramatic paragraph reaches mid-screen. */
+[data-moment="thunder"] { --glow:#8fb3ff; } [data-moment="breakthrough"] { --glow:#f2b632; } [data-moment="sword"] { --glow:#7fd8ff; } [data-moment="flame"] { --glow:#ff7a2f; } [data-moment="blood"] { --glow:#d0233f; }
+[data-moment-seen] { animation:moment-text 2.6s ease-out; }
+@keyframes moment-text { 20% { text-shadow:0 0 14px var(--glow); } }
+.moment-layer { position:fixed; inset:0; z-index:40; pointer-events:none; overflow:hidden; animation:moment-life 2.6s ease-out forwards; }
+.moment-layer::before { content:""; position:absolute; inset:0; }
+@keyframes moment-life { 0% { opacity:0; } 8%,70% { opacity:1; } 100% { opacity:0; } }
+.moment-thunder::before { background:radial-gradient(ellipse at 50% 0%,rgba(214,228,255,.85),rgba(120,150,255,.22) 45%,transparent 75%); animation:moment-flash 1.2s linear both; }
+@keyframes moment-flash { 0% { opacity:0; } 5% { opacity:.95; } 12% { opacity:.1; } 20% { opacity:.7; } 40%,100% { opacity:0; } }
+.moment-bolt { position:absolute; top:0; left:calc(50% - min(19vw,130px)); width:min(38vw,260px); height:55vh; fill:none; stroke:#f4f8ff; stroke-width:2.5; stroke-linejoin:round; filter:drop-shadow(0 0 8px #9fc1ff) drop-shadow(0 0 22px #6f8cff); stroke-dasharray:400; stroke-dashoffset:400; animation:moment-strike .35s ease-out .04s forwards, moment-fade 1s ease-in .7s forwards; }
+@keyframes moment-strike { to { stroke-dashoffset:0; } }
+@keyframes moment-fade { to { opacity:0; } }
+.moment-breakthrough::before { background:radial-gradient(circle at 50% 55%,rgba(255,214,102,.5),rgba(255,190,60,.16) 35%,transparent 65%); animation:moment-pulse 2.4s ease-out both; }
+@keyframes moment-pulse { 0% { opacity:0; transform:scale(.4); } 25% { opacity:1; } 100% { opacity:0; transform:scale(1.6); } }
+.moment-ring { position:absolute; left:50%; top:55%; width:40px; height:40px; margin:-20px; border-radius:50%; border:2px solid rgba(255,220,120,.9); box-shadow:0 0 30px rgba(255,200,80,.8); animation:moment-ring 1.8s ease-out forwards; }
+@keyframes moment-ring { to { opacity:0; transform:scale(18); } }
+.moment-breakthrough { --mote:#ffd66b; } .moment-flame { --mote:#ff8a3d; }
+.moment-mote { position:absolute; bottom:-10px; left:var(--x); width:6px; height:6px; border-radius:50%; background:var(--mote); box-shadow:0 0 10px var(--mote); opacity:0; animation:moment-rise 2.3s ease-out var(--d) forwards; }
+@keyframes moment-rise { 15% { opacity:.9; } 100% { opacity:0; transform:translate(var(--drift),-70vh); } }
+.moment-streak { position:absolute; left:-20%; top:var(--y); width:140%; height:4px; border-radius:4px; background:linear-gradient(90deg,transparent,rgba(40,130,210,.9) 40%,#fff 50%,rgba(40,130,210,.9) 60%,transparent); box-shadow:0 0 14px rgba(40,140,230,.85),0 0 32px rgba(120,200,255,.6); transform:rotate(-18deg) translateX(-100%); animation:moment-slash .7s cubic-bezier(.2,.7,.2,1) var(--d) forwards; }
+@keyframes moment-slash { to { transform:rotate(-18deg) translateX(100%); } }
+.moment-flame::before { box-shadow:inset 0 0 120px 30px rgba(255,110,40,.5); animation:moment-flicker 2.4s ease-in-out both; }
+@keyframes moment-flicker { 0%,100% { opacity:0; } 15%,45% { opacity:1; } 30% { opacity:.6; } 60% { opacity:.7; } }
+.moment-blood::before { box-shadow:inset 0 0 140px 40px rgba(170,10,40,.55); animation:moment-heartbeat 2.4s ease-out both; }
+@keyframes moment-heartbeat { 0% { opacity:0; } 12% { opacity:1; } 22% { opacity:.4; } 32% { opacity:.9; } 100% { opacity:0; } }
+@media(prefers-reduced-motion:reduce) { [data-moment-seen] { animation:none; } .moment-layer { display:none; } }

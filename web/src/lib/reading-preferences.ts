@@ -15,12 +15,12 @@ export type ReadingTheme = typeof readingThemes[number]["id"];
 
 export type ReadingPreferences = {
   theme: ReadingTheme; font: "sans" | "serif"; fontSize: number; lineHeight: number;
-  columnWidth: 60 | 68 | 75; leaves: boolean; sound: AmbientSound; ambientVolume: number;
+  columnWidth: 60 | 68 | 75; leaves: boolean; moments: boolean; sound: AmbientSound; ambientVolume: number;
 };
-export const preferenceKeys = ["theme", "font", "fontSize", "lineHeight", "columnWidth", "leaves", "sound", "ambientVolume"] as const;
+export const preferenceKeys = ["theme", "font", "fontSize", "lineHeight", "columnWidth", "leaves", "moments", "sound", "ambientVolume"] as const;
 export const defaultPreferences: ReadingPreferences = {
   theme: "sepia", font: "sans", fontSize: 20, lineHeight: 1.8, columnWidth: 68,
-  leaves: true, sound: "brown", ambientVolume: 0.1,
+  leaves: true, moments: true, sound: "brown", ambientVolume: 0.1,
 };
 
 export function validPreferences(saved: unknown): Partial<ReadingPreferences> {
@@ -33,6 +33,7 @@ export function validPreferences(saved: unknown): Partial<ReadingPreferences> {
   if (typeof value.lineHeight === "number" && value.lineHeight >= 1.5 && value.lineHeight <= 2.2 && Math.abs(value.lineHeight * 10 - Math.round(value.lineHeight * 10)) < 1e-8) result.lineHeight = value.lineHeight;
   if (value.columnWidth === 60 || value.columnWidth === 68 || value.columnWidth === 75) result.columnWidth = value.columnWidth;
   if (typeof value.leaves === "boolean") result.leaves = value.leaves;
+  if (typeof value.moments === "boolean") result.moments = value.moments;
   if (isAmbientSound(value.sound)) result.sound = value.sound;
   if (typeof value.ambientVolume === "number" && Number.isFinite(value.ambientVolume)) result.ambientVolume = Math.max(0, Math.min(0.3, value.ambientVolume));
   return result;
