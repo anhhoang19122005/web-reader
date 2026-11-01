@@ -2,8 +2,9 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type CSSProperties } from "react";
-import { sceneOptions, useAmbientSession, useReadingPreferences, useReaderSession, type Scene } from "../lib/reading-preferences";
+import { sceneGroups, sceneOptions, useAmbientSession, useReadingPreferences, useReaderSession, type Scene } from "../lib/reading-preferences";
 import { scatter } from "../lib/scatter";
+import { BeastPortrait } from "./BeastPortraits";
 import { closeAmbient, setAmbientGain, startAmbient, suspendAmbient } from "../lib/ambient-audio";
 import { useTtsSession } from "../lib/tts-session";
 import { ambientSounds, isAmbientSound } from "../lib/ambient-sounds";
@@ -63,10 +64,11 @@ export function ReadingAtmosphere() {
 const vars = (values: Record<string, string | number>) => values as CSSProperties;
 const runes = "天道玄靈符陣劍命";
 
-// Genre backdrops: slow, faint particles for cultivation (tu tiên), xianxia (tiên hiệp) and fantasy (huyền huyễn) stories.
+// Backdrops: genre scenes (tu tiên, tiên hiệp, huyền huyễn) and one per divine beast (tứ tượng) or fierce beast (hung thú); slow and faint.
 function AtmosphereScene({ kind }: { kind: Exclude<Scene, "off"> }) {
   const at = (p: ReturnType<typeof scatter>[number]) => ({ "--x": `${p.x}%`, "--y": `${p.y}%`, "--t": `${p.t}s`, "--d": `${p.d}s`, "--s": p.s, "--drift": `${p.drift}px` });
   return <div className={`scene scene-${kind}`}>
+    <BeastPortrait kind={kind} />
     {kind === "tutien" && <><span className="scene-array" />{scatter(22, 16).map((p, i) => <span key={i} className="scene-qi" style={vars(at(p))} />)}</>}
     {kind === "tienhiep" && <><span className="scene-peaks" />
       {scatter(5, 70).map((p, i) => <span key={`c${i}`} className="scene-cloud" style={vars({ ...at(p), "--y": `${6 + i * 16}%` })} />)}
@@ -75,6 +77,32 @@ function AtmosphereScene({ kind }: { kind: Exclude<Scene, "off"> }) {
     {kind === "huyenhuyen" && <><span className="scene-aurora" /><span className="scene-aurora scene-aurora-b" />
       {scatter(34, 4).map((p, i) => <span key={`s${i}`} className="scene-star" style={vars(at(p))} />)}
       {scatter(8, 22).map((p, i) => <span key={`r${i}`} className="scene-rune" style={vars(at(p))}>{runes[i]}</span>)}</>}
+    {kind === "thanhlong" && <>
+      <svg className="scene-dragon" viewBox="0 0 400 200" preserveAspectRatio="none"><path className="scene-dragon-trail" pathLength="500" d="M-10 150 C 60 30, 130 30, 190 105 S 310 195, 410 55" /><path className="scene-dragon-body" pathLength="500" d="M-10 150 C 60 30, 130 30, 190 105 S 310 195, 410 55" /></svg>
+      {scatter(4, 60).map((p, i) => <span key={`c${i}`} className="scene-cloud scene-mist" style={vars({ ...at(p), "--y": `${14 + i * 20}%` })} />)}
+      {scatter(12, 13).map((p, i) => <span key={`p${i}`} className="scene-petal" style={vars(at(p))} />)}</>}
+    {kind === "bachho" && <><span className="scene-stripes" /><span className="scene-stripes scene-stripes-r" />
+      {scatter(3, 13).map((p, i) => <span key={`k${i}`} className="scene-claw" style={vars({ ...at(p), "--x": `${15 + i * 28}%`, "--y": `${18 + (i % 2) * 34}%` })} />)}
+      {scatter(16, 12).map((p, i) => <span key={`s${i}`} className="scene-spark" style={vars(at(p))} />)}</>}
+    {kind === "chutuoc" && <><span className="scene-firebed" />
+      {scatter(28, 6).map((p, i) => <span key={`s${i}`} className="scene-spark" style={vars(at(p))} />)}</>}
+    {kind === "huyenvu" && <><span className="scene-shell" />
+      {scatter(3, 7).map((p, i) => <span key={`r${i}`} className="scene-ripple" style={vars({ ...at(p), "--x": `${20 + i * 28}%` })} />)}
+      {scatter(14, 16).map((p, i) => <span key={`b${i}`} className="scene-bubble" style={vars(at(p))} />)}</>}
+    {kind === "hondon" && <><span className="scene-vortex" />
+      {scatter(4, 55).map((p, i) => <span key={`c${i}`} className="scene-cloud scene-smoke" style={vars({ ...at(p), "--y": `${10 + i * 22}%` })} />)}
+      {scatter(18, 18).map((p, i) => <span key={`s${i}`} className="scene-spark" style={vars(at(p))} />)}</>}
+    {kind === "cungky" && <><span className="scene-flash" />
+      <svg className="scene-bolt" viewBox="0 0 100 220" preserveAspectRatio="none"><polyline points="60,0 42,70 58,78 30,150 48,156 20,220" /></svg>
+      {scatter(6, 1.4).map((p, i) => <span key={`g${i}`} className="moment-gust" style={vars({ ...at(p), "--y": `${10 + p.y}%` })} />)}
+      {scatter(14, 5).map((p, i) => <span key={`s${i}`} className="scene-spark" style={vars(at(p))} />)}</>}
+    {kind === "daongot" && <>
+      <svg className="scene-crack" viewBox="0 0 400 100" preserveAspectRatio="none"><polyline points="0,70 40,55 70,68 120,40 150,58 210,30 240,52 300,38 330,60 400,45" /><polyline points="120,40 110,15 130,0" /><polyline points="210,30 225,10" /></svg>
+      {scatter(30, 14).map((p, i) => <span key={`a${i}`} className="scene-fall" style={vars(at(p))} />)}
+      {scatter(3, 11).map((p, i) => <span key={`e${i}`} className="scene-eyes" style={vars(at(p))} />)}</>}
+    {kind === "thaothiet" && <><span className="scene-array" />
+      {scatter(3, 12).map((p, i) => <span key={`e${i}`} className="scene-eyes" style={vars(at(p))} />)}
+      {scatter(14, 14).map((p, i) => <span key={`s${i}`} className="scene-spark" style={vars(at(p))} />)}</>}
   </div>;
 }
 
@@ -96,7 +124,9 @@ export function AtmosphereControls() {
     <label>Nền động <select aria-label="Nền động theo thể loại truyện" value={scene} onChange={(e) => {
       const option = sceneOptions.find((item) => item.id === e.target.value);
       if (option) useReadingPreferences.setState({ scene: option.id });
-    }}>{sceneOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+    }}><option value="off">Tắt</option>{sceneGroups.map((group) => <optgroup key={group} label={group}>
+      {sceneOptions.filter((item) => item.group === group).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+    </optgroup>)}</select></label>
     <button type="button" aria-pressed={enabled} onClick={() => void toggle()}>{enabled ? "Tắt âm nền" : "Bật âm nền"}</button>
     <label>Âm nền <select aria-label="Loại âm nền" value={sound} onChange={(e) => {
       if (isAmbientSound(e.target.value)) useReadingPreferences.setState({ sound: e.target.value });

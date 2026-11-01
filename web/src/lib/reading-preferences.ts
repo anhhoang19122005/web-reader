@@ -22,11 +22,20 @@ export const readingThemes = [
 export type ReadingTheme = typeof readingThemes[number]["id"];
 
 export const sceneOptions = [
-  { id: "off", name: "Tắt" },
-  { id: "tutien", name: "Tu tiên · linh khí" },
-  { id: "tienhiep", name: "Tiên hiệp · mây núi" },
-  { id: "huyenhuyen", name: "Huyền huyễn · tinh tú" },
+  { id: "off", name: "Tắt", group: "" },
+  { id: "tutien", name: "Tu tiên · linh khí", group: "Thể loại truyện" },
+  { id: "tienhiep", name: "Tiên hiệp · mây núi", group: "Thể loại truyện" },
+  { id: "huyenhuyen", name: "Huyền huyễn · tinh tú", group: "Thể loại truyện" },
+  { id: "thanhlong", name: "Thanh Long · rồng xanh", group: "Tứ tượng thần thú" },
+  { id: "bachho", name: "Bạch Hổ · hổ trắng", group: "Tứ tượng thần thú" },
+  { id: "chutuoc", name: "Chu Tước · phượng lửa", group: "Tứ tượng thần thú" },
+  { id: "huyenvu", name: "Huyền Vũ · quy xà", group: "Tứ tượng thần thú" },
+  { id: "hondon", name: "Hỗn Độn · hư không", group: "Hung thú" },
+  { id: "cungky", name: "Cùng Kỳ · bão sét", group: "Hung thú" },
+  { id: "daongot", name: "Đào Ngột · tro tàn", group: "Hung thú" },
+  { id: "thaothiet", name: "Thao Thiết · đồng cổ", group: "Hung thú" },
 ] as const;
+export const sceneGroups = ["Thể loại truyện", "Tứ tượng thần thú", "Hung thú"] as const;
 export type Scene = typeof sceneOptions[number]["id"];
 
 export type ReadingPreferences = {
