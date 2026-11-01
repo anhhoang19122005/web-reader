@@ -282,3 +282,61 @@ option,optgroup { color:var(--foreground); background:var(--surface); }
 @media(hover:hover) { .book-link:hover .book-cover,.continue-book:hover .book-cover { transform:rotateY(-28deg) translateY(-4px); } .book-link:hover .book-cover::before,.continue-book:hover .book-cover::before { background-position:0 0; } }
 .book-link:focus-visible .book-cover { transform:rotateY(-28deg); }
 @media(prefers-reduced-motion:reduce) { .book-cover,.shelf-grid .book-row,.primary-button { transition:none; } }
+
+/* Weather words run letter by letter once their paragraph reaches mid-screen. */
+.wx > i { display:inline-block; font-style:normal; }
+[data-wx-live] .wx > i { animation-duration:1.5s; animation-delay:calc(var(--i) * 90ms); animation-timing-function:ease-out; animation-fill-mode:both; }
+[data-wx-live] .wx-rain > i { animation-name:wx-rain; }
+[data-wx-live] .wx-snow > i { animation-name:wx-snow; animation-duration:2.2s; }
+[data-wx-live] .wx-wind > i { animation-name:wx-wind; }
+[data-wx-live] .wx-fog > i { animation-name:wx-fog; animation-duration:2.4s; }
+[data-wx-live] .wx-sun > i { animation-name:wx-sun; animation-duration:2.2s; }
+[data-wx-live] .wx-storm > i { animation-name:wx-storm; animation-duration:1.2s; }
+@keyframes wx-rain { 0% { opacity:0; transform:translateY(-.9em); color:#4f86d6; } 55% { opacity:1; transform:translateY(.15em); color:#4f86d6; } 75% { transform:translateY(-.08em); } 100% { opacity:1; transform:none; color:inherit; } }
+@keyframes wx-snow { 0% { opacity:0; transform:translate(-.3em,-.7em) rotate(-25deg); color:#5b9bd5; text-shadow:0 0 8px #bfe3ff; } 70% { opacity:1; color:#5b9bd5; text-shadow:0 0 8px #bfe3ff; } 100% { opacity:1; transform:none; color:inherit; text-shadow:none; } }
+@keyframes wx-wind { 0% { opacity:0; transform:translateX(-1em) skewX(-24deg); filter:blur(3px); } 60% { opacity:1; transform:translateX(.12em) skewX(8deg); filter:none; } 100% { opacity:1; transform:none; } }
+@keyframes wx-fog { 0% { opacity:0; filter:blur(7px); } 50% { opacity:.7; filter:blur(3px); } 100% { opacity:1; filter:none; } }
+@keyframes wx-sun { 0% { opacity:.3; color:#d98b00; text-shadow:0 0 0 #ffc447; } 45% { opacity:1; color:#d98b00; text-shadow:0 0 14px #ffc447; } 100% { opacity:1; color:inherit; text-shadow:none; } }
+@keyframes wx-storm { 0% { opacity:0; } 12% { opacity:1; color:#7b93ff; text-shadow:0 0 12px #b9caff; } 24% { opacity:.15; } 36% { opacity:1; text-shadow:0 0 16px #b9caff; } 100% { opacity:1; color:inherit; text-shadow:none; } }
+
+/* Weather overlays reuse the moment layer, but linger longer. */
+.moment-rain,.moment-snow,.moment-wind,.moment-fog,.moment-sun { animation-duration:4.5s; }
+.moment-rain::before { background:linear-gradient(to bottom,rgba(40,70,110,.22),rgba(40,70,110,.04)); }
+.moment-drop { position:absolute; top:-8vh; left:var(--x); width:1.5px; height:clamp(14px,3vh,26px); background:linear-gradient(to bottom,transparent,rgba(130,175,235,.9)); transform:rotate(12deg); animation:moment-rain var(--t) linear var(--d) infinite; }
+@keyframes moment-rain { to { transform:translate(-24vh,112vh) rotate(12deg); } }
+.moment-snow::before { background:linear-gradient(to bottom,rgba(190,215,240,.25),transparent 70%); }
+.moment-flake { position:absolute; top:-3vh; left:var(--x); width:calc(var(--s) * 7px); aspect-ratio:1; border-radius:50%; background:#fff; box-shadow:0 0 6px 1px rgba(120,170,230,.9); animation:moment-snow var(--t) linear var(--d) infinite; }
+@keyframes moment-snow { 50% { transform:translate(var(--drift),55vh); } 100% { transform:translate(calc(var(--drift) * -.5),108vh); } }
+.moment-gust { position:absolute; left:-30vw; top:var(--y); width:30vw; height:3px; border-radius:3px; background:linear-gradient(90deg,transparent,rgba(120,150,175,.9),transparent); box-shadow:0 0 8px rgba(160,190,215,.6); animation:moment-gust var(--t) ease-in var(--d) infinite; }
+@keyframes moment-gust { to { transform:translateX(150vw); } }
+.moment-leaf { position:absolute; left:-4vw; top:var(--y); width:calc(var(--s) * 11px); height:calc(var(--s) * 20px); border-radius:2px 85% 2px 85%; background:var(--leaf,#7b925b); opacity:.8; animation:moment-leaf var(--t) ease-in var(--d) infinite; }
+@keyframes moment-leaf { 50% { transform:translate(55vw,-6vh) rotate(260deg); } 100% { transform:translate(112vw,8vh) rotate(560deg); } }
+.moment-fogbank { position:absolute; left:-45vw; top:var(--y); width:60vw; height:26vh; border-radius:50%; background:radial-gradient(closest-side,rgba(190,198,208,.75),transparent); filter:blur(18px); animation:moment-fog var(--t) linear var(--d) infinite; }
+@keyframes moment-fog { to { transform:translateX(150vw); } }
+.moment-sun::before { background:radial-gradient(circle at 85% 8%,rgba(255,214,110,.55),rgba(255,190,80,.15) 38%,transparent 65%); }
+.moment-sunburst { position:absolute; right:-25vmin; top:-25vmin; width:80vmin; height:80vmin; border-radius:50%; background:repeating-conic-gradient(rgba(255,215,120,.35) 0 6deg,transparent 6deg 16deg); -webkit-mask:radial-gradient(circle,#000 10%,transparent 68%); mask:radial-gradient(circle,#000 10%,transparent 68%); animation:scene-spin 12s linear infinite; }
+
+/* Genre backdrops: tu tiên (qi motes + formation), tiên hiệp (peaks, clouds, petals, flying sword), huyền huyễn (aurora, stars, runes). */
+.scene { position:absolute; inset:0; overflow:hidden; opacity:.6; }
+.scene > span { position:absolute; display:block; }
+@keyframes scene-spin { to { transform:rotate(1turn); } }
+.scene-qi { left:var(--x); bottom:-14px; width:calc(var(--s) * 8px); aspect-ratio:1; border-radius:50%; background:radial-gradient(circle,#fff3c4,rgba(255,196,80,.55) 45%,transparent 72%); animation:scene-rise var(--t) linear var(--d) infinite; }
+@keyframes scene-rise { 0% { opacity:0; transform:translate(0,0); } 12% { opacity:.9; } 85% { opacity:.5; } 100% { opacity:0; transform:translate(var(--drift),-108vh); } }
+.scene-array { right:-14vmin; bottom:-14vmin; width:64vmin; aspect-ratio:1; border-radius:50%; border:2px dashed rgba(255,196,80,.55); box-shadow:inset 0 0 50px rgba(255,196,80,.22); animation:scene-spin 80s linear infinite; }
+.scene-array::before,.scene-array::after { content:""; position:absolute; inset:12%; border:1px solid rgba(255,196,80,.5); border-radius:50%; }
+.scene-array::after { inset:26%; border-radius:0; transform:rotate(45deg); }
+.scene-peaks { left:0; right:0; bottom:0; height:28vh; background:linear-gradient(to top,color-mix(in srgb,var(--accent) 30%,transparent),transparent); clip-path:polygon(0 100%,0 62%,7% 42%,15% 64%,25% 30%,35% 60%,47% 20%,59% 62%,71% 34%,83% 60%,92% 40%,100% 64%,100% 100%); }
+.scene-cloud { left:-32vw; top:var(--y); width:32vw; height:9vh; border-radius:50%; background:radial-gradient(closest-side,rgba(255,255,255,.9),transparent); filter:blur(10px); animation:scene-drift var(--t) linear var(--d) infinite; }
+@keyframes scene-drift { to { transform:translateX(170vw); } }
+.scene-petal { left:var(--x); top:-4vh; width:calc(var(--s) * 9px); height:calc(var(--s) * 12px); border-radius:50% 0 50% 0; background:#f7b6cb; animation:scene-petal var(--t) linear var(--d) infinite; }
+@keyframes scene-petal { 0% { opacity:0; transform:translate(0,0) rotate(0); } 10% { opacity:.85; } 100% { opacity:0; transform:translate(28vw,108vh) rotate(540deg); } }
+.scene-sword { left:-22vw; top:18%; width:18vw; height:2px; background:linear-gradient(90deg,transparent,#9fdcff 65%,#fff); box-shadow:0 0 12px #8fd3ff; opacity:0; transform:rotate(7deg); animation:scene-sword 24s ease-in 4s infinite; }
+@keyframes scene-sword { 0% { opacity:0; transform:translateX(0) rotate(7deg); } 3% { opacity:1; } 14% { opacity:1; transform:translateX(150vw) rotate(7deg); } 15%,100% { opacity:0; transform:translateX(150vw) rotate(7deg); } }
+.scene-star { left:var(--x); top:var(--y); width:calc(var(--s) * 3px); aspect-ratio:1; border-radius:50%; background:var(--accent); box-shadow:0 0 6px var(--accent); animation:scene-twinkle var(--t) ease-in-out var(--d) infinite; }
+@keyframes scene-twinkle { 0%,100% { opacity:.15; transform:scale(.7); } 50% { opacity:.95; transform:scale(1.3); } }
+.scene-aurora { left:-10%; right:-10%; top:-12%; height:46vh; background:linear-gradient(100deg,transparent 8%,rgba(70,240,190,.32) 32%,rgba(140,100,255,.32) 62%,transparent 92%); filter:blur(36px); animation:scene-aurora 20s ease-in-out infinite alternate; }
+.scene-aurora-b { top:4%; background:linear-gradient(80deg,transparent 12%,rgba(255,110,190,.26) 40%,rgba(80,170,255,.28) 70%,transparent 94%); animation-duration:27s; animation-direction:alternate-reverse; }
+@keyframes scene-aurora { from { transform:translateX(-7%) skewX(-9deg); opacity:.5; } to { transform:translateX(7%) skewX(9deg); opacity:.95; } }
+.scene-rune { left:var(--x); bottom:-6vh; font-size:calc(var(--s) * 1.6rem); line-height:1; color:color-mix(in srgb,var(--accent) 55%,#8a6bff); text-shadow:0 0 14px rgba(140,110,255,.9); animation:scene-rune var(--t) ease-in-out var(--d) infinite; }
+@keyframes scene-rune { 0% { opacity:0; transform:translateY(0) rotate(-8deg); } 15% { opacity:.8; } 80% { opacity:.4; } 100% { opacity:0; transform:translateY(-95vh) rotate(8deg); } }
+@media(prefers-reduced-motion:reduce) { .scene { display:none; } [data-wx-live] .wx > i { animation:none; } }

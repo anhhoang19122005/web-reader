@@ -3,32 +3,49 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createBookmark, deleteBookmark, getBook, getBookmarks, getChapter, getProgress, saveProgress, TtsChunk, type ReadingProgress } from "../lib/api";
 import { Icon } from "./Icon";
 import { AtmosphereControls } from "./ReadingAtmosphere";
 import { CultivationMoments } from "./CultivationMoments";
 import { momentKind } from "../lib/cultivation-moments";
+import { weatherMatches, type WeatherMatch } from "../lib/weather-words";
 import { TtsPlayer } from "./TtsPlayer";
 import { defaultPreferences, readingThemes, useReadingPreferences, useReaderSession } from "../lib/reading-preferences";
 import { characterRange, scrollToCharacter, visibleCharacter } from "../lib/reader-position";
 import { useTtsSession } from "../lib/tts-session";
 
-function highlightedText(text: string, chunks: TtsChunk[], activeChunk: number | null, reveal: number): ReactNode[] {
+// Weather words become one span per letter so CSS can run them in sequence; the characters (and UTF-16 offsets) are unchanged.
+function runText(text: string, from: number, to: number, matches: WeatherMatch[]): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let cursor = from;
+  for (const match of matches) {
+    if (match.end <= cursor || match.start >= to) continue;
+    const start = Math.max(cursor, match.start), end = Math.min(to, match.end);
+    if (start > cursor) nodes.push(text.slice(cursor, start));
+    // A bare space inside an inline-block would collapse, gluing "mặt trời" together.
+    nodes.push(<span className={`wx wx-${match.kind}`} key={start}>{Array.from(text.slice(start, end), (letter, i) => letter === " " ? " " : <i key={i} style={{ "--i": start - match.start + i } as CSSProperties}>{letter}</i>)}</span>);
+    cursor = end;
+  }
+  if (cursor < to) nodes.push(text.slice(cursor, to));
+  return nodes;
+}
+
+function highlightedText(text: string, chunks: TtsChunk[], activeChunk: number | null, reveal: number, matches: WeatherMatch[]): ReactNode[] {
   const nodes: ReactNode[] = [];
   let cursor = 0;
   chunks.forEach((chunk) => {
     const start = Math.max(cursor, chunk.startCharacter);
     const end = Math.min(text.length, chunk.endCharacter);
-    if (start > cursor) nodes.push(<span key={`text-${cursor}`}>{text.slice(cursor, start)}</span>);
+    if (start > cursor) nodes.push(<span key={`text-${cursor}`}>{runText(text, cursor, start, matches)}</span>);
     if (end > start) {
       const isActive = activeChunk === chunk.chunkIndex;
       const split = isActive ? Math.max(start, Math.min(end, reveal)) : end;
-      nodes.push(<mark className={isActive ? "reading-highlight scroll-mt-28" : "rounded bg-transparent text-inherit"} key={`chunk-${chunk.chunkIndex}`}>{text.slice(start, split)}{split < end && <span className="reading-pending">{text.slice(split, end)}</span>}</mark>);
+      nodes.push(<mark className={isActive ? "reading-highlight scroll-mt-28" : "rounded bg-transparent text-inherit"} key={`chunk-${chunk.chunkIndex}`}>{runText(text, start, split, matches)}{split < end && <span className="reading-pending">{runText(text, split, end, matches)}</span>}</mark>);
     }
     cursor = Math.max(cursor, end);
   });
-  if (cursor < text.length) nodes.push(<span key={`text-${cursor}`}>{text.slice(cursor)}</span>);
+  if (cursor < text.length) nodes.push(<span key={`text-${cursor}`}>{runText(text, cursor, text.length, matches)}</span>);
   return nodes;
 }
 
@@ -36,7 +53,9 @@ function highlightedText(text: string, chunks: TtsChunk[], activeChunk: number |
 const Paragraph = memo(function Paragraph({ part, start, chunk, reveal }: { part: string; start: number; chunk: TtsChunk | null; reveal: number }) {
   const local = chunk ? [{ ...chunk, startCharacter: chunk.startCharacter - start, endCharacter: chunk.endCharacter - start }] : [];
   const moment = useMemo(() => momentKind(part), [part]);
-  return <span data-start={start} data-end={start + part.length} data-moment={moment ?? undefined}>{highlightedText(part, local, chunk?.chunkIndex ?? null, reveal - start)}</span>;
+  const weather = useReadingPreferences((state) => state.weather);
+  const matches = useMemo(() => weather ? weatherMatches(part) : [], [part, weather]);
+  return <span data-start={start} data-end={start + part.length} data-moment={moment ?? undefined} data-weather={matches[0]?.kind}>{highlightedText(part, local, chunk?.chunkIndex ?? null, reveal - start, matches)}</span>;
 });
 
 function chapterParagraphs(text: string, chunk: TtsChunk | null, reveal: number) {

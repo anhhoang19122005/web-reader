@@ -13,14 +13,22 @@ export const readingThemes = [
 ] as const;
 export type ReadingTheme = typeof readingThemes[number]["id"];
 
+export const sceneOptions = [
+  { id: "off", name: "Tắt" },
+  { id: "tutien", name: "Tu tiên · linh khí" },
+  { id: "tienhiep", name: "Tiên hiệp · mây núi" },
+  { id: "huyenhuyen", name: "Huyền huyễn · tinh tú" },
+] as const;
+export type Scene = typeof sceneOptions[number]["id"];
+
 export type ReadingPreferences = {
   theme: ReadingTheme; font: "sans" | "serif"; fontSize: number; lineHeight: number;
-  columnWidth: 60 | 68 | 75; leaves: boolean; moments: boolean; sound: AmbientSound; ambientVolume: number;
+  columnWidth: 60 | 68 | 75; leaves: boolean; moments: boolean; weather: boolean; scene: Scene; sound: AmbientSound; ambientVolume: number;
 };
-export const preferenceKeys = ["theme", "font", "fontSize", "lineHeight", "columnWidth", "leaves", "moments", "sound", "ambientVolume"] as const;
+export const preferenceKeys = ["theme", "font", "fontSize", "lineHeight", "columnWidth", "leaves", "moments", "weather", "scene", "sound", "ambientVolume"] as const;
 export const defaultPreferences: ReadingPreferences = {
   theme: "sepia", font: "sans", fontSize: 20, lineHeight: 1.8, columnWidth: 68,
-  leaves: true, moments: true, sound: "brown", ambientVolume: 0.1,
+  leaves: true, moments: true, weather: true, scene: "off", sound: "brown", ambientVolume: 0.1,
 };
 
 export function validPreferences(saved: unknown): Partial<ReadingPreferences> {
@@ -34,6 +42,8 @@ export function validPreferences(saved: unknown): Partial<ReadingPreferences> {
   if (value.columnWidth === 60 || value.columnWidth === 68 || value.columnWidth === 75) result.columnWidth = value.columnWidth;
   if (typeof value.leaves === "boolean") result.leaves = value.leaves;
   if (typeof value.moments === "boolean") result.moments = value.moments;
+  if (typeof value.weather === "boolean") result.weather = value.weather;
+  if (sceneOptions.some((scene) => scene.id === value.scene)) result.scene = value.scene as Scene;
   if (isAmbientSound(value.sound)) result.sound = value.sound;
   if (typeof value.ambientVolume === "number" && Number.isFinite(value.ambientVolume)) result.ambientVolume = Math.max(0, Math.min(0.3, value.ambientVolume));
   return result;

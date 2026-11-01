@@ -18,14 +18,14 @@ func TestValidatePreferences(t *testing.T) {
 		body  string
 		valid bool
 	}{
-		{`{"theme":"sakura","font":"serif","fontSize":24,"lineHeight":1.8,"columnWidth":68,"leaves":false,"moments":false,"sound":"rain","ambientVolume":0.2}`, true},
+		{`{"theme":"sakura","font":"serif","fontSize":24,"lineHeight":1.8,"columnWidth":68,"leaves":false,"moments":false,"weather":false,"scene":"huyenhuyen","sound":"rain","ambientVolume":0.2}`, true},
 		{`{"fontSize":16}`, true}, {`{"fontSize":28}`, true}, {`{"lineHeight":2.2}`, true},
 		{`{"sound":"brown"}`, true}, {`{"sound":"white"}`, true}, {`{"sound":"pink"}`, true},
 		{`{"sound":"fan"}`, true}, {`{"sound":"rain"}`, true}, {`{"sound":"wind"}`, true},
 		{`{"sound":"waves"}`, true}, {`{"sound":"stream"}`, true},
 		{`{"sound":"unknown"}`, false}, {`{"sound":null}`, false}, {`{"sound":1}`, false},
 		{`{}`, false}, {`{"fontSize":29}`, false}, {`{"fontSize":20.5}`, false}, {`{"lineHeight":1.85}`, false},
-		{`{"columnWidth":70}`, false}, {`{"ambientVolume":0.31}`, false}, {`{"leaves":"true"}`, false}, {`{"moments":1}`, false},
+		{`{"columnWidth":70}`, false}, {`{"ambientVolume":0.31}`, false}, {`{"leaves":"true"}`, false}, {`{"moments":1}`, false}, {`{"weather":"yes"}`, false}, {`{"scene":"unknown"}`, false}, {`{"scene":"tutien"}`, true},
 		{`{"theme":"invalid"}`, false}, {`{"font":null}`, false}, {`{"enabled":true}`, false}, {`{"userId":"other"}`, false},
 	} {
 		var values map[string]json.RawMessage
