@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
 import { apiUrl, generateTts, getTtsChunks, getTtsVoices, type TtsChunk, type TtsGenerateResponse } from "../lib/api";
 import { useTtsSession } from "../lib/tts-session";
+import { followFxOptions, followOptions, useReadingPreferences } from "../lib/reading-preferences";
 import { audioPosition, resumePoint } from "../lib/tts-progress";
 
 const providerLabels: Record<string, string> = { edge: "Edge-TTS", saydi: "SaydiVoice", mock: "Demo", local: "Local · Offline", vieneu: "VieNeu · Local" };
@@ -23,6 +24,9 @@ export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChang
   const pendingSeek = useRef<number | null>(null);
   const durationSeconds = useRef(0);
   const loadedAudioKey = useRef("");
+  const follow = useReadingPreferences((state) => state.follow);
+  const followLead = useReadingPreferences((state) => state.followLead);
+  const followFx = useReadingPreferences((state) => state.followFx);
   const { voiceId, speakingRate, pitch, volume, playbackRate, preset, provider, running, speechPlaying, autoplayChapterId } = useTtsSession();
   const setVoiceId = (voiceId: string) => useTtsSession.setState({ voiceId });
   const setSpeakingRate = (speakingRate: number) => useTtsSession.setState({ speakingRate });
@@ -312,6 +316,9 @@ export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChang
       <label className="flex items-center gap-1">Cao độ <input aria-label="Cao độ" type="range" min="-20" max="20" step="1" value={pitch} disabled={isFixedPitchProvider} title={selectedVoiceInfo?.provider === "saydi" ? "SaydiVoice chưa hỗ trợ cao độ" : selectedVoiceInfo?.provider === "local" ? "Giọng local offline chưa hỗ trợ cao độ" : undefined} onChange={(event) => { invalidateSetting(); setPitch(Number(event.target.value)); }} /> {isFixedPitchProvider ? "Không hỗ trợ" : pitch}</label>
       <label className="flex items-center gap-1">Âm lượng <input aria-label="Âm lượng" type="range" min="0" max="1" step="0.1" value={volume} onChange={(event) => { const next = Number(event.target.value); setVolume(next); if (audioRef.current) audioRef.current.volume = next; }} /> {Math.round(volume * 100)}%</label>
       <label className="flex items-center gap-1">Phát lại <select aria-label="Tốc độ phát lại" className="rounded-lg border border-current/20 bg-transparent px-2 py-1" value={playbackRate} onChange={(event) => { const value = Number(event.target.value); setPlaybackRate(value); if (audioRef.current) audioRef.current.playbackRate = value; }}><option value="0.75">0.75x</option><option value="1">1x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option></select></label>
+      <select className="rounded-lg border border-current/20 bg-transparent px-2 py-2" aria-label="Hiệu ứng chữ chạy theo giọng đọc" value={follow} onChange={(event) => { const option = followOptions.find((item) => item.id === event.target.value); if (option) useReadingPreferences.setState({ follow: option.id }); }}>{followOptions.map((option) => <option key={option.id} value={option.id}>Chữ chạy: {option.name}</option>)}</select>
+      <select className="rounded-lg border border-current/20 bg-transparent px-2 py-2" aria-label="Hiệu ứng của chữ đang đọc" value={followFx} disabled={follow === "off" || follow === "chunk"} onChange={(event) => { const option = followFxOptions.find((item) => item.id === event.target.value); if (option) useReadingPreferences.setState({ followFx: option.id }); }}>{followFxOptions.map((option) => <option key={option.id} value={option.id}>Hiệu ứng: {option.name}</option>)}</select>
+      <label className="flex items-center gap-1">Lệch nhịp chữ <input aria-label="Lệch nhịp chữ chạy" type="range" min="-1" max="1" step="0.1" value={followLead} disabled={follow === "chunk" || follow === "off"} title="Âm: chữ chạy chậm hơn giọng. Dương: chạy trước giọng." onChange={(event) => useReadingPreferences.setState({ followLead: Number(event.target.value) })} /> {followLead > 0 ? "+" : ""}{followLead.toFixed(1)}s</label>
     </div><button className="settings-close" onClick={(event) => { onLayoutChange?.(); event.currentTarget.closest("details")?.removeAttribute("open"); }}>Đóng cài đặt giọng</button></div></details>
     {error && <p className="mt-3 text-sm error-message" role="alert">{error}</p>}
     {voices.data.length === 1 && voices.data[0].provider === "mock" && <p className="mt-3 text-xs opacity-60">Đang dùng voice demo. Chạy lại start-reader-go.ps1 để dùng Edge-TTS miễn phí.</p>}

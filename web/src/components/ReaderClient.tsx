@@ -11,9 +11,10 @@ import { CultivationMoments } from "./CultivationMoments";
 import { momentKind } from "../lib/cultivation-moments";
 import { weatherMatches, type WeatherMatch } from "../lib/weather-words";
 import { TtsPlayer } from "./TtsPlayer";
-import { defaultPreferences, readingThemes, useReadingPreferences, useReaderSession } from "../lib/reading-preferences";
+import { defaultPreferences, readingThemes, useReadingPreferences, useReaderSession, type FollowFx } from "../lib/reading-preferences";
 import { characterRange, scrollToCharacter, visibleCharacter } from "../lib/reader-position";
 import { useTtsSession } from "../lib/tts-session";
+import { audioPosition, revealStop } from "../lib/tts-progress";
 
 // Weather words become one span per letter so CSS can run them in sequence; the characters (and UTF-16 offsets) are unchanged.
 function runText(text: string, from: number, to: number, matches: WeatherMatch[]): ReactNode[] {
@@ -31,7 +32,10 @@ function runText(text: string, from: number, to: number, matches: WeatherMatch[]
   return nodes;
 }
 
-function highlightedText(text: string, chunks: TtsChunk[], activeChunk: number | null, reveal: number, matches: WeatherMatch[]): ReactNode[] {
+// Per-letter spans (capped delay) so a long sentence does not wait seconds for its last letters.
+const letters = (text: string, from: number, to: number) => Array.from(text.slice(from, to), (letter, i) => /\s/.test(letter) ? letter : <i key={i} style={{ "--i": Math.min(i, 30) } as CSSProperties}>{letter}</i>);
+
+function highlightedText(text: string, chunks: TtsChunk[], activeChunk: number | null, reveal: number, from: number, fx: FollowFx, matches: WeatherMatch[]): ReactNode[] {
   const nodes: ReactNode[] = [];
   let cursor = 0;
   chunks.forEach((chunk) => {
@@ -41,7 +45,9 @@ function highlightedText(text: string, chunks: TtsChunk[], activeChunk: number |
     if (end > start) {
       const isActive = activeChunk === chunk.chunkIndex;
       const split = isActive ? Math.max(start, Math.min(end, reveal)) : end;
-      nodes.push(<mark className={isActive ? "reading-highlight scroll-mt-28" : "rounded bg-transparent text-inherit"} key={`chunk-${chunk.chunkIndex}`}>{runText(text, start, split, matches)}{split < end && <span className="reading-pending">{runText(text, split, end, matches)}</span>}</mark>);
+      // The text revealed since the last tick carries the chosen effect; keying it by `split` replays the effect for each new word.
+      const recentStart = fx !== "none" && isActive ? Math.max(start, Math.min(split, from)) : split;
+      nodes.push(<mark className={isActive ? "reading-highlight scroll-mt-28" : "rounded bg-transparent text-inherit"} key={`chunk-${chunk.chunkIndex}`}>{runText(text, start, recentStart, matches)}{recentStart < split && <span key={split} className={`fx fx-${fx}`}>{fx === "rise" || fx === "wave" ? letters(text, recentStart, split) : runText(text, recentStart, split, matches)}</span>}{split < end && <span className="reading-pending">{runText(text, split, end, matches)}</span>}</mark>);
     }
     cursor = Math.max(cursor, end);
   });
@@ -50,48 +56,51 @@ function highlightedText(text: string, chunks: TtsChunk[], activeChunk: number |
 }
 
 // Memoised so only paragraphs touched by the active chunk re-render while the typewriter advances.
-const Paragraph = memo(function Paragraph({ part, start, chunk, reveal }: { part: string; start: number; chunk: TtsChunk | null; reveal: number }) {
+const Paragraph = memo(function Paragraph({ part, start, chunk, reveal, from }: { part: string; start: number; chunk: TtsChunk | null; reveal: number; from: number }) {
   const local = chunk ? [{ ...chunk, startCharacter: chunk.startCharacter - start, endCharacter: chunk.endCharacter - start }] : [];
   const moment = useMemo(() => momentKind(part), [part]);
   const weather = useReadingPreferences((state) => state.weather);
+  const fx = useReadingPreferences((state) => state.followFx);
   const matches = useMemo(() => weather ? weatherMatches(part) : [], [part, weather]);
-  return <span data-start={start} data-end={start + part.length} data-moment={moment ?? undefined} data-weather={matches[0]?.kind}>{highlightedText(part, local, chunk?.chunkIndex ?? null, reveal - start, matches)}</span>;
+  return <span data-start={start} data-end={start + part.length} data-moment={moment ?? undefined} data-weather={matches[0]?.kind}>{highlightedText(part, local, chunk?.chunkIndex ?? null, reveal - start, from - start, fx, matches)}</span>;
 });
 
-function chapterParagraphs(text: string, chunk: TtsChunk | null, reveal: number) {
+function chapterParagraphs(text: string, chunk: TtsChunk | null, reveal: number, from: number) {
   let offset = 0;
   return (text.match(/[^\n]*\n|[^\n]+$/g) ?? []).map((part) => {
     const start = offset; offset += part.length;
     const touched = chunk && chunk.startCharacter < offset && chunk.endCharacter > start;
-    return <Paragraph key={start} part={part} start={start} chunk={touched ? chunk : null} reveal={touched ? reveal : 0} />;
+    return <Paragraph key={start} part={part} start={start} chunk={touched ? chunk : null} reveal={touched ? reveal : 0} from={touched ? from : 0} />;
   });
 }
 
-// Reveals the active TTS chunk word by word, paced by the playing audio.
+// Reveals the active TTS chunk word by word (or sentence by sentence), paced by the playing audio.
 function useTypewriter(chunk: TtsChunk | null, text: string | undefined) {
   const speaking = useTtsSession((state) => state.speechPlaying);
-  const [reveal, setReveal] = useState({ index: -1, end: 0 });
-  const animate = speaking && typeof window !== "undefined" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const follow = useReadingPreferences((state) => state.follow);
+  const lead = useReadingPreferences((state) => state.followLead);
+  const [reveal, setReveal] = useState({ index: -1, end: 0, from: 0 });
+  const animate = speaking && (follow === "word" || follow === "sentence") && typeof window !== "undefined" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   useEffect(() => {
     if (!chunk || text === undefined || !animate) return;
     let frame = 0;
     const tick = () => {
       const audio = document.querySelector("audio");
-      const length = chunk.endCharacter - chunk.startCharacter;
-      if (audio && Number.isFinite(audio.duration) && audio.duration > 0 && length > 0) {
-        let end = chunk.startCharacter + Math.floor(Math.min(1, audio.currentTime / audio.duration) * length);
-        while (end < chunk.endCharacter && !/\s/.test(text[end] ?? " ")) end++;
-        setReveal((previous) => previous.index === chunk.chunkIndex && previous.end === end ? previous : { index: chunk.chunkIndex, end });
+      const position = audio ? audioPosition(chunk, audio.currentTime + lead, audio.duration) : null;
+      if (position !== null) {
+        const end = revealStop(text, position, chunk.endCharacter, follow === "sentence");
+        // shortcut: after a resume jump only the last 240 characters get the effect, so a whole paragraph does not flash at once.
+        setReveal((previous) => previous.index === chunk.chunkIndex && previous.end === end ? previous : { index: chunk.chunkIndex, end, from: Math.max(end - 240, previous.index === chunk.chunkIndex ? previous.end : chunk.startCharacter) });
       }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [chunk, animate, text]);
-  if (!chunk) return 0;
-  if (!animate) return chunk.endCharacter;
+  }, [chunk, animate, text, follow, lead]);
+  if (!chunk) return { end: 0, from: 0 };
+  if (!animate) return { end: chunk.endCharacter, from: chunk.endCharacter };
   // A new chunk starts hidden until the first audio frame reports progress.
-  return reveal.index === chunk.chunkIndex ? reveal.end : chunk.startCharacter;
+  return reveal.index === chunk.chunkIndex ? reveal : { end: chunk.startCharacter, from: chunk.startCharacter };
 }
 
 export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId: string }) {
@@ -136,7 +145,7 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
     }),
   });
   const chapterText = chapterQuery.data?.plainText;
-  const revealEnd = useTypewriter(ttsChunk, chapterText);
+  const reveal = useTypewriter(ttsChunk, chapterText);
   const chapters = bookQuery.data?.chapters ?? [];
   const chapterIndex = chapters.findIndex((chapter) => chapter.id === chapterId);
   const previousChapter = chapters[chapterIndex - 1];
@@ -383,7 +392,7 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
       {bookmarkMutation.isError && <p className="error-message" role="alert">Không lưu được dấu trang.</p>}
       {showHint && <p className="reader-tools subtle mt-3">Dùng nút Tập trung hoặc phím F để ẩn điều khiển. Chạm vào chữ vẫn chọn văn bản bình thường. <button aria-label="Ẩn gợi ý tập trung" onClick={() => { localStorage.setItem("gac-sach-focus-hint", "seen"); setShowHint(false); }}>Đã hiểu</button></p>}
       <p className="reader-estimate subtle mt-4">{percent}% chương · {bookPercent}% cả sách · Còn khoảng {remainingMinutes} phút đọc</p>
-      <div ref={textContainerRef} className={`reader-text whitespace-pre-line ${titleInText ? "title-in-text mt-2" : "mt-8"}`} style={{ fontFamily: "inherit", lineHeight }}>{chapterParagraphs(chapterQuery.data.plainText, ttsChunk, revealEnd)}</div>
+      <div ref={textContainerRef} data-follow={preferences.follow} className={`reader-text whitespace-pre-line ${titleInText ? "title-in-text mt-2" : "mt-8"}`} style={{ fontFamily: "inherit", lineHeight }}>{chapterParagraphs(chapterQuery.data.plainText, ttsChunk, reveal.end, reveal.from)}</div>
       <CultivationMoments containerRef={textContainerRef} text={chapterQuery.data.plainText} />
       <footer className="reader-tools mt-14 flex justify-between border-t border-current/10 pb-40 pt-5 text-sm"><button disabled={!previousChapter} onClick={() => previousChapter && selectChapter(previousChapter.id)}>← Chương trước</button><button disabled={!nextChapter} onClick={() => nextChapter && selectChapter(nextChapter.id)}>Chương sau →</button></footer>
     </article>

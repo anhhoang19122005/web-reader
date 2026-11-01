@@ -8,6 +8,13 @@ export function resumePoint(chunks: TtsChunk[], position: number) {
   return { index, fraction };
 }
 
+// Running text stops at the end of the current word, or of the current sentence.
+export function revealStop(text: string, from: number, limit: number, sentence: boolean) {
+  let end = from;
+  while (end < limit && !(/\s/.test(text[end] ?? " ") && (!sentence || /[.!?…”"]/.test(text[end - 1] ?? "")))) end++;
+  return end;
+}
+
 export function audioPosition(chunk: TtsChunk, currentTime: number, duration: number) {
   if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(currentTime)) return null;
   // ponytail: estimate characters by audio time; word timestamps are needed for exact alignment.

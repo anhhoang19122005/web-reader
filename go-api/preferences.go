@@ -40,14 +40,22 @@ func validatePreferences(values map[string]json.RawMessage) (bson.M, bool) {
 		case "scene":
 			s, ok := value.(string)
 			valid = ok && slices.Contains([]string{"off", "tutien", "tienhiep", "huyenhuyen", "thanhlong", "bachho", "chutuoc", "huyenvu", "hondon", "cungky", "daongot", "thaothiet"}, s)
+		case "followFx":
+			s, ok := value.(string)
+			valid = ok && slices.Contains([]string{"none", "fade", "glow", "rise", "wave", "ink"}, s)
+		case "follow":
+			s, ok := value.(string)
+			valid = ok && slices.Contains([]string{"word", "sentence", "chunk", "off"}, s)
 		case "leaves", "moments", "weather":
 			_, valid = value.(bool)
-		case "fontSize", "lineHeight", "columnWidth", "ambientVolume":
+		case "fontSize", "lineHeight", "columnWidth", "ambientVolume", "followLead":
 			n, ok := value.(float64)
 			if ok {
 				switch key {
 				case "fontSize":
 					valid = n >= 16 && n <= 28 && n == math.Trunc(n)
+				case "followLead":
+					valid = n >= -1 && n <= 1 && math.Abs(n*10-math.Round(n*10)) < 1e-8
 				case "lineHeight":
 					valid = n >= 1.5 && n <= 2.2 && math.Abs(n*10-math.Round(n*10)) < 1e-8
 				case "columnWidth":

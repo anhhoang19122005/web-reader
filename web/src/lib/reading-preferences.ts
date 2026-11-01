@@ -38,14 +38,32 @@ export const sceneOptions = [
 export const sceneGroups = ["Thể loại truyện", "Tứ tượng thần thú", "Hung thú"] as const;
 export type Scene = typeof sceneOptions[number]["id"];
 
+export const followOptions = [
+  { id: "word", name: "Từng chữ" },
+  { id: "sentence", name: "Từng câu" },
+  { id: "chunk", name: "Cả đoạn sáng đều" },
+  { id: "off", name: "Tắt" },
+] as const;
+export type Follow = typeof followOptions[number]["id"];
+
+export const followFxOptions = [
+  { id: "none", name: "Không" },
+  { id: "fade", name: "Hiện mờ dần" },
+  { id: "glow", name: "Phát sáng" },
+  { id: "rise", name: "Nổi lên" },
+  { id: "wave", name: "Sóng chữ" },
+  { id: "ink", name: "Mực loang" },
+] as const;
+export type FollowFx = typeof followFxOptions[number]["id"];
+
 export type ReadingPreferences = {
   theme: ReadingTheme; font: "sans" | "serif"; fontSize: number; lineHeight: number;
-  columnWidth: 60 | 68 | 75; leaves: boolean; moments: boolean; weather: boolean; scene: Scene; sound: AmbientSound; ambientVolume: number;
+  columnWidth: 60 | 68 | 75; leaves: boolean; moments: boolean; weather: boolean; scene: Scene; follow: Follow; followLead: number; followFx: FollowFx; sound: AmbientSound; ambientVolume: number;
 };
-export const preferenceKeys = ["theme", "font", "fontSize", "lineHeight", "columnWidth", "leaves", "moments", "weather", "scene", "sound", "ambientVolume"] as const;
+export const preferenceKeys = ["theme", "font", "fontSize", "lineHeight", "columnWidth", "leaves", "moments", "weather", "scene", "follow", "followLead", "followFx", "sound", "ambientVolume"] as const;
 export const defaultPreferences: ReadingPreferences = {
   theme: "sepia", font: "sans", fontSize: 20, lineHeight: 1.8, columnWidth: 68,
-  leaves: true, moments: true, weather: true, scene: "off", sound: "brown", ambientVolume: 0.1,
+  leaves: true, moments: true, weather: true, scene: "off", follow: "word", followLead: 0, followFx: "fade", sound: "brown", ambientVolume: 0.1,
 };
 
 export function validPreferences(saved: unknown): Partial<ReadingPreferences> {
@@ -61,6 +79,9 @@ export function validPreferences(saved: unknown): Partial<ReadingPreferences> {
   if (typeof value.moments === "boolean") result.moments = value.moments;
   if (typeof value.weather === "boolean") result.weather = value.weather;
   if (sceneOptions.some((scene) => scene.id === value.scene)) result.scene = value.scene as Scene;
+  if (followOptions.some((option) => option.id === value.follow)) result.follow = value.follow as Follow;
+  if (followFxOptions.some((option) => option.id === value.followFx)) result.followFx = value.followFx as FollowFx;
+  if (typeof value.followLead === "number" && value.followLead >= -1 && value.followLead <= 1 && Math.abs(value.followLead * 10 - Math.round(value.followLead * 10)) < 1e-8) result.followLead = value.followLead;
   if (isAmbientSound(value.sound)) result.sound = value.sound;
   if (typeof value.ambientVolume === "number" && Number.isFinite(value.ambientVolume)) result.ambientVolume = Math.max(0, Math.min(0.3, value.ambientVolume));
   return result;

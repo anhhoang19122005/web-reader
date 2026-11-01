@@ -42,6 +42,7 @@ option,optgroup { color:var(--foreground); background:var(--surface); }
 .reader-text { font-family:Arial,Helvetica,sans-serif; letter-spacing:normal; word-spacing:normal; font-kerning:normal; text-wrap:pretty; }
 .reading-highlight { background:var(--accent-soft); color:inherit; border-radius:3px; }
 .reading-pending { opacity:.45; }
+[data-follow="off"] .reading-highlight { background:transparent; }
 .reader-dock { border:1px solid var(--line); background:var(--surface); }
 .tts-player { padding:12px 16px; background:var(--surface); }
 .player-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
@@ -431,3 +432,16 @@ option,optgroup { color:var(--foreground); background:var(--surface); }
 :root:is([data-theme="light"],[data-theme="sepia"],[data-theme="ocean"],[data-theme="sakura"],[data-theme="bachho"]) .beast-mask { background:color-mix(in srgb,var(--c) 60%,#000); filter:none; }
 @media(max-width:1200px) { .scene-beast { opacity:.75; } }
 @media(max-width:640px) { .scene-beast { width:min(78vw,var(--size)); opacity:.4; } }
+
+/* Effects for the word or sentence the voice has just reached; each new word remounts the span, so the effect replays. */
+.fx-fade { animation:fx-fade .6s ease-out both; }
+.fx-glow { animation:fx-glow 1s ease-out both; }
+.fx-ink { animation:fx-ink .9s ease-out both; }
+.fx-rise > i,.fx-wave > i { display:inline-block; font-style:normal; animation:fx-rise .5s ease-out both; animation-delay:calc(var(--i) * 22ms); }
+.fx-wave > i { animation-name:fx-wave; animation-duration:.8s; }
+@keyframes fx-fade { from { opacity:0; } }
+@keyframes fx-glow { from { opacity:.2; color:var(--accent); text-shadow:0 0 12px var(--accent),0 0 26px var(--accent); } 45% { opacity:1; color:var(--accent); text-shadow:0 0 10px var(--accent); } }
+@keyframes fx-ink { from { opacity:0; filter:blur(6px); letter-spacing:.08em; } }
+@keyframes fx-rise { from { opacity:0; transform:translateY(.6em); } }
+@keyframes fx-wave { 0% { transform:translateY(0); } 30% { transform:translateY(-.4em); color:var(--accent); } 60% { transform:translateY(.1em); } 100% { transform:none; } }
+@media(prefers-reduced-motion:reduce) { .fx-fade,.fx-glow,.fx-ink,.fx-rise > i,.fx-wave > i { animation:none; } }
