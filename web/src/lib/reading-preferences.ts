@@ -10,6 +10,14 @@ export const readingThemes = [
   { id: "ocean", name: "Biển", color: "#d5e7ed" },
   { id: "sakura", name: "Anh đào", color: "#f1d8e2" },
   { id: "sunset", name: "Hoàng hôn", color: "#593e43" },
+  { id: "thanhlong", name: "Thanh Long", color: "#5fe0c0" },
+  { id: "bachho", name: "Bạch Hổ", color: "#d8c27a" },
+  { id: "chutuoc", name: "Chu Tước", color: "#ff7a45" },
+  { id: "huyenvu", name: "Huyền Vũ", color: "#7db4ff" },
+  { id: "hondon", name: "Hỗn Độn", color: "#c39bff" },
+  { id: "cungky", name: "Cùng Kỳ", color: "#ffd34d" },
+  { id: "daongot", name: "Đào Ngột", color: "#cdbb6e" },
+  { id: "thaothiet", name: "Thao Thiết", color: "#43c6a0" },
 ] as const;
 export type ReadingTheme = typeof readingThemes[number]["id"];
 

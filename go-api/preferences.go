@@ -30,7 +30,7 @@ func validatePreferences(values map[string]json.RawMessage) (bson.M, bool) {
 		switch key {
 		case "theme":
 			s, ok := value.(string)
-			valid = ok && slices.Contains([]string{"light", "sepia", "dark", "forest", "ocean", "sakura", "sunset"}, s)
+			valid = ok && slices.Contains([]string{"light", "sepia", "dark", "forest", "ocean", "sakura", "sunset", "thanhlong", "bachho", "chutuoc", "huyenvu", "hondon", "cungky", "daongot", "thaothiet"}, s)
 		case "font":
 			s, ok := value.(string)
 			valid = ok && (s == "sans" || s == "serif")

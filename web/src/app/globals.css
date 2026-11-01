@@ -70,7 +70,7 @@ option,optgroup { color:var(--foreground); background:var(--surface); }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto !important; transition-duration:0s !important; } .falling-leaf { display:none; animation:none; } }
 
 .error-message { color:#a12a27; }
-:root:is([data-theme="dark"],[data-theme="forest"],[data-theme="sunset"]) .error-message { color:#ffb7ae; }
+:root:is([data-theme="dark"],[data-theme="forest"],[data-theme="sunset"],[data-theme="thanhlong"],[data-theme="chutuoc"],[data-theme="huyenvu"],[data-theme="hondon"],[data-theme="cungky"],[data-theme="daongot"],[data-theme="thaothiet"]) .error-message { color:#ffb7ae; }
 .upload-button:focus-within { outline:2px solid var(--accent); outline-offset:4px; }
 
 .settings-body { max-height:min(22dvh,180px); overflow-y:auto; overscroll-behavior:contain; padding:2px 6px 8px 2px; }
@@ -248,7 +248,7 @@ option,optgroup { color:var(--foreground); background:var(--surface); }
 
 /* Colour and depth: aurora backdrop, 3D book covers, floating cards, pressable buttons. */
 :root { --aurora-a:#7c5cff; --aurora-b:#ff6fa5; --aurora-c:#2fb8d6; --depth-shadow:0 1px 2px rgb(0 0 0 / .06),0 8px 24px -6px rgb(0 0 0 / .14); --depth-shadow-hover:0 2px 4px rgb(0 0 0 / .08),0 22px 40px -12px rgb(0 0 0 / .28); }
-:root:is([data-theme="dark"],[data-theme="forest"],[data-theme="sunset"]) { --aurora-a:#9a7bff; --aurora-b:#ff5c9a; --aurora-c:#22c3e6; --aurora-strength:30%; --depth-shadow:0 1px 2px rgb(0 0 0 / .3),0 10px 28px -6px rgb(0 0 0 / .5); --depth-shadow-hover:0 2px 4px rgb(0 0 0 / .35),0 24px 44px -12px rgb(0 0 0 / .65); }
+:root:is([data-theme="dark"],[data-theme="forest"],[data-theme="sunset"],[data-theme="thanhlong"],[data-theme="chutuoc"],[data-theme="huyenvu"],[data-theme="hondon"],[data-theme="cungky"],[data-theme="daongot"],[data-theme="thaothiet"]) { --aurora-a:#9a7bff; --aurora-b:#ff5c9a; --aurora-c:#22c3e6; --aurora-strength:30%; --depth-shadow:0 1px 2px rgb(0 0 0 / .3),0 10px 28px -6px rgb(0 0 0 / .5); --depth-shadow-hover:0 2px 4px rgb(0 0 0 / .35),0 24px 44px -12px rgb(0 0 0 / .65); }
 .app-surface { background:
   radial-gradient(60rem 36rem at 0% -10%,color-mix(in srgb,var(--aurora-a) var(--aurora-strength,20%),transparent),transparent 70%),
   radial-gradient(50rem 30rem at 100% 0%,color-mix(in srgb,var(--aurora-b) calc(var(--aurora-strength,20%) * .8),transparent),transparent 70%),
@@ -340,3 +340,28 @@ option,optgroup { color:var(--foreground); background:var(--surface); }
 .scene-rune { left:var(--x); bottom:-6vh; font-size:calc(var(--s) * 1.6rem); line-height:1; color:color-mix(in srgb,var(--accent) 55%,#8a6bff); text-shadow:0 0 14px rgba(140,110,255,.9); animation:scene-rune var(--t) ease-in-out var(--d) infinite; }
 @keyframes scene-rune { 0% { opacity:0; transform:translateY(0) rotate(-8deg); } 15% { opacity:.8; } 80% { opacity:.4; } 100% { opacity:0; transform:translateY(-95vh) rotate(8deg); } }
 @media(prefers-reduced-motion:reduce) { .scene { display:none; } [data-wx-live] .wx > i { animation:none; } }
+
+/* Tứ tượng thần thú: Thanh Long (Đông/Mộc), Bạch Hổ (Tây/Kim), Chu Tước (Nam/Hỏa), Huyền Vũ (Bắc/Thủy). */
+:root[data-theme="thanhlong"] { --background:#0e1f1d; --surface:#17302d; --foreground:#e3f5ef; --muted:#a9cbc3; --line:#2f5650; --accent:#5fe0c0; --accent-soft:#1f4a43; --leaf:#4fd1b0; --aurora-a:#2dd4bf; --aurora-b:#38bdf8; --aurora-c:#86efac; --aurora-strength:32%; }
+:root[data-theme="bachho"] { --background:#f1efe9; --surface:#fbfaf6; --foreground:#23221f; --muted:#5d5a50; --line:#cdc5ad; --accent:#7a5a0a; --accent-soft:#ece3c6; --leaf:#c9a227; --aurora-a:#d4af37; --aurora-b:#9aa5b1; --aurora-c:#f1c27d; }
+:root[data-theme="chutuoc"] { --background:#200f0d; --surface:#301915; --foreground:#fbe9e1; --muted:#e0b9a9; --line:#6a3328; --accent:#ff7a45; --accent-soft:#5a2a1f; --leaf:#ff8a4c; --aurora-a:#ff5a36; --aurora-b:#ffb43b; --aurora-c:#ff3d6e; --aurora-strength:32%; }
+:root[data-theme="huyenvu"] { --background:#0b1220; --surface:#131c2e; --foreground:#e5edf9; --muted:#a9b8d0; --line:#2b3b57; --accent:#7db4ff; --accent-soft:#1d2e4d; --leaf:#6aa4e8; --aurora-a:#3b82f6; --aurora-b:#6366f1; --aurora-c:#22d3ee; --aurora-strength:32%; }
+
+/* Hung thú (tứ hung): Hỗn Độn, Cùng Kỳ, Đào Ngột, Thao Thiết. */
+:root[data-theme="hondon"] { --background:#17121f; --surface:#221a2e; --foreground:#ece6f5; --muted:#bcb0cf; --line:#4a3a63; --accent:#c39bff; --accent-soft:#3a2a55; --leaf:#a77df0; --aurora-a:#9b5cff; --aurora-b:#ec4899; --aurora-c:#60a5fa; --aurora-strength:34%; }
+:root[data-theme="cungky"] { --background:#14161f; --surface:#1e2230; --foreground:#eef0f7; --muted:#b6bbcf; --line:#3d4560; --accent:#ffd34d; --accent-soft:#2f3550; --leaf:#e6c14a; --aurora-a:#fde047; --aurora-b:#818cf8; --aurora-c:#38bdf8; --aurora-strength:30%; }
+:root[data-theme="daongot"] { --background:#1b1a14; --surface:#28271d; --foreground:#f0ede0; --muted:#c4c0a6; --line:#54523b; --accent:#cdbb6e; --accent-soft:#3d3b25; --leaf:#a7a45a; --aurora-a:#a3a34a; --aurora-b:#c2410c; --aurora-c:#78716c; --aurora-strength:28%; }
+:root[data-theme="thaothiet"] { --background:#1a1512; --surface:#271f1a; --foreground:#f2e6dc; --muted:#ccb9a8; --line:#5d4a3a; --accent:#43c6a0; --accent-soft:#1f3d34; --leaf:#cd7f32; --aurora-a:#cd7f32; --aurora-b:#43c6a0; --aurora-c:#b45309; --aurora-strength:30%; }
+
+/* A faint Hán-tự emblem of the beast drifts in the corner; it breathes slowly and is static under reduced motion. */
+:root:is([data-theme="thanhlong"],[data-theme="bachho"],[data-theme="chutuoc"],[data-theme="huyenvu"],[data-theme="hondon"],[data-theme="cungky"],[data-theme="daongot"],[data-theme="thaothiet"])::after { position:fixed; right:1vw; bottom:2vh; z-index:1; pointer-events:none; writing-mode:vertical-rl; font:900 min(34vw,300px)/1 var(--font-reader-serif),"Noto Serif CJK SC","Songti SC","SimSun",serif; color:var(--accent); opacity:.06; animation:emblem-breathe 9s ease-in-out infinite; }
+:root[data-theme="thanhlong"]::after { content:"青龍"; }
+:root[data-theme="bachho"]::after { content:"白虎"; }
+:root[data-theme="chutuoc"]::after { content:"朱雀"; }
+:root[data-theme="huyenvu"]::after { content:"玄武"; }
+:root[data-theme="hondon"]::after { content:"混沌"; }
+:root[data-theme="cungky"]::after { content:"窮奇"; }
+:root[data-theme="daongot"]::after { content:"檮杌"; }
+:root[data-theme="thaothiet"]::after { content:"饕餮"; }
+@keyframes emblem-breathe { 50% { opacity:.11; } }
+@media(prefers-reduced-motion:reduce) { :root::after { animation:none !important; } }

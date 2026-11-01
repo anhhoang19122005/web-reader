@@ -26,7 +26,7 @@ func TestValidatePreferences(t *testing.T) {
 		{`{"sound":"unknown"}`, false}, {`{"sound":null}`, false}, {`{"sound":1}`, false},
 		{`{}`, false}, {`{"fontSize":29}`, false}, {`{"fontSize":20.5}`, false}, {`{"lineHeight":1.85}`, false},
 		{`{"columnWidth":70}`, false}, {`{"ambientVolume":0.31}`, false}, {`{"leaves":"true"}`, false}, {`{"moments":1}`, false}, {`{"weather":"yes"}`, false}, {`{"scene":"unknown"}`, false}, {`{"scene":"tutien"}`, true},
-		{`{"theme":"invalid"}`, false}, {`{"font":null}`, false}, {`{"enabled":true}`, false}, {`{"userId":"other"}`, false},
+		{`{"theme":"thanhlong"}`, true}, {`{"theme":"bachho"}`, true}, {`{"theme":"chutuoc"}`, true}, {`{"theme":"huyenvu"}`, true}, {`{"theme":"hondon"}`, true}, {`{"theme":"cungky"}`, true}, {`{"theme":"daongot"}`, true}, {`{"theme":"thaothiet"}`, true}, {`{"theme":"invalid"}`, false}, {`{"font":null}`, false}, {`{"enabled":true}`, false}, {`{"userId":"other"}`, false},
 	} {
 		var values map[string]json.RawMessage
 		if err := json.Unmarshal([]byte(sample.body), &values); err != nil {
