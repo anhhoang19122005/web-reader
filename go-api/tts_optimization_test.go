@@ -188,6 +188,27 @@ func TestConcurrentTTSGeneration(t *testing.T) {
 	}
 	t.Log("8 listeners + canceled leader: 1 provider call, 1 audio record, cache reuse and HTTP Range passed")
 
+	// A cache record whose local file was deleted must be regenerated, not served as a 404.
+	var record mongoAudioChunk
+	if err := a.collection(audioCollection).FindOne(ctx, bson.M{}).Decode(&record); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.store.Delete(ctx, record.AudioStorageKey); err != nil {
+		t.Fatal(err)
+	}
+	healed, apiErr := request(ctx)
+	if apiErr != nil || healed.Cached || healed.AudioURL == audioURL || calls.Load() != 2 {
+		t.Fatalf("stale cache not regenerated: %+v %v calls=%d", healed, apiErr, calls.Load())
+	}
+	if count, err := a.collection(audioCollection).CountDocuments(ctx, bson.M{}); err != nil || count != 1 {
+		t.Fatalf("stale record kept: count=%d err=%v", count, err)
+	}
+	w = httptest.NewRecorder()
+	a.ServeHTTP(w, httptest.NewRequest("GET", "/api"+healed.AudioURL, nil).WithContext(ctx))
+	if w.Code != 200 {
+		t.Fatalf("regenerated audio not served: %d", w.Code)
+	}
+
 	t.Run("precise parameters do not coalesce", func(t *testing.T) {
 		a.config = Config{}
 		writes := make(chan struct{}, 2)

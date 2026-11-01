@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math"
 	"net/http"
 	"os"
@@ -355,14 +357,19 @@ func (a *App) generateTTSAudio(ctx context.Context, chapter chapterForTTS, chunk
 		"chapterId": chapter.ID.String(), "chunkIndex": chunk.ChunkIndex, "voiceId": voiceID,
 		"speakingRate": rate, "pitch": effectivePitch, "volume": effectiveVolume, "textHash": textHash,
 	}).Decode(&cached)
-	if err == nil {
+	if err == nil && !a.localAudioMissing(cached.AudioStorageKey) {
 		cachedID, parseErr := uuid.Parse(cached.ID)
 		if parseErr != nil {
 			return ttsResponse{}, databaseError(parseErr)
 		}
 		return ttsResponse{AudioURL: "/tts/audio/" + cachedID.String(), MimeType: cached.MimeType, DurationMS: cached.DurationMS, ChunkIndex: cached.ChunkIndex, StartCharacter: cached.StartCharacter, EndCharacter: cached.EndCharacter, Cached: true}, nil
 	}
-	if !errorsIsNoRows(err) {
+	if err == nil {
+		// The record outlived its local file, which would 404 forever; drop it and synthesize again.
+		if _, err := a.collection(audioCollection).DeleteOne(ctx, bson.M{"_id": cached.ID}); err != nil {
+			return ttsResponse{}, databaseError(err)
+		}
+	} else if !errorsIsNoRows(err) {
 		return ttsResponse{}, databaseError(err)
 	}
 	var voice *ttsVoice
@@ -401,6 +408,20 @@ func (a *App) generateTTSAudio(ctx context.Context, chapter chapterForTTS, chunk
 		return ttsResponse{}, databaseError(err)
 	}
 	return ttsResponse{AudioURL: "/tts/audio/" + audioID.String(), MimeType: mimeType, DurationMS: durationMS, ChunkIndex: chunk.ChunkIndex, StartCharacter: chunk.StartCharacter, EndCharacter: chunk.EndCharacter}, nil
+}
+
+// Only local files are checked: a remote store would need a network round trip per cache hit.
+func (a *App) localAudioMissing(key string) bool {
+	store, ok := a.store.(*localStorage)
+	if !ok {
+		return false
+	}
+	path, err := store.path(key)
+	if err != nil {
+		return true
+	}
+	_, err = os.Stat(path)
+	return errors.Is(err, fs.ErrNotExist)
 }
 
 func (a *App) ttsAudio(w http.ResponseWriter, r *http.Request, requestPath string) *apiError {
