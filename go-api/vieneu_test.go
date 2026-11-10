@@ -11,24 +11,40 @@ import (
 )
 
 func TestVieNeuAudio(t *testing.T) {
+	wantPreset := "Thiền Tâm Đức"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Error(err)
 		}
-		if r.URL.Path != "/v1/audio/speech" || body["voice"] != "Thiền Tâm Đức" || body["response_format"] != "pcm" {
+		if r.URL.Path != "/v1/audio/speech" || body["voice"] != wantPreset || body["response_format"] != "pcm" {
 			t.Errorf("unexpected speech request: %v", body)
 		}
 		_, _ = w.Write(make([]byte, 48000))
 	}))
 	defer server.Close()
 	app := &App{config: Config{VieNeuURL: server.URL + "/v1"}}
-	wav, mime, duration, err := app.vieNeuAudio(context.Background(), "Xin chào")
+	wav, mime, duration, err := app.vieNeuAudio(context.Background(), vieNeuVoiceID, "Xin chào")
 	if err != nil || mime != "audio/wav" || duration != 1000 || len(wav) != 48044 || string(wav[:4]) != "RIFF" || binary.LittleEndian.Uint32(wav[40:44]) != 48000 {
 		t.Fatalf("invalid WAV: mime=%s duration=%d err=%v", mime, duration, err)
 	}
-	if voices := app.offlineVoices(); len(voices) != 1 || voices[0].ID != vieNeuVoiceID {
+	voices := app.offlineVoices()
+	if len(voices) != 7 || voices[0].ID != vieNeuVoiceID || voices[1].ID != vieNeuHaiDangVoiceID {
 		t.Fatalf("missing VieNeu voice: %v", voices)
+	}
+	genders := map[string]string{}
+	for _, voice := range voices {
+		genders[voice.ID] = voice.Gender
+	}
+	if genders["vieneu-thien-minh"] != "male" || genders["vieneu-ngoc-linh"] != "female" || genders["vieneu-thuc-doan"] != "female" {
+		t.Fatalf("wrong VieNeu voice genders: %v", genders)
+	}
+	wantPreset = "Hải Đăng"
+	if _, _, _, err := app.vieNeuAudio(context.Background(), vieNeuHaiDangVoiceID, "Xin chào"); err != nil {
+		t.Fatalf("Hải Đăng synthesis failed: %v", err)
+	}
+	if _, _, _, err := app.vieNeuAudio(context.Background(), "vieneu-unknown", "Xin chào"); err == nil {
+		t.Fatal("unknown VieNeu voice must be rejected")
 	}
 }
 
@@ -39,7 +55,7 @@ func TestVieNeuLocalIntegration(t *testing.T) {
 		t.Skip("set VIENEU_INTEGRATION_URL to test the local model")
 	}
 	app := &App{config: Config{VieNeuURL: url}}
-	wav, _, duration, err := app.vieNeuAudio(context.Background(), "Xin chào. Đây là giọng Thiền Tâm Đức, đọc truyện trên máy tính của bạn.")
+	wav, _, duration, err := app.vieNeuAudio(context.Background(), vieNeuVoiceID, "Xin chào. Đây là giọng Thiền Tâm Đức, đọc truyện trên máy tính của bạn.")
 	if err != nil || duration <= 0 {
 		t.Fatalf("local synthesis failed: %v", err)
 	}

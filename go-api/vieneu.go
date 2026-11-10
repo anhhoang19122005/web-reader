@@ -10,23 +10,52 @@ import (
 	"time"
 )
 
-const vieNeuVoiceID = "vieneu-thien-tam-duc"
+const (
+	vieNeuVoiceID        = "vieneu-thien-tam-duc"
+	vieNeuHaiDangVoiceID = "vieneu-hai-dang"
+)
+
+// preset phải khớp chính xác tên giọng trên server VieNeu.
+var vieNeuVoices = []struct{ id, preset, gender string }{
+	{vieNeuVoiceID, "Thiền Tâm Đức", "male"},
+	{vieNeuHaiDangVoiceID, "Hải Đăng", "male"},
+	{"vieneu-thien-minh", "Thiện Minh", "male"},
+	{"vieneu-thanh-binh", "Thanh Bình", "male"},
+	{"vieneu-thai-son", "Thái Sơn", "male"},
+	{"vieneu-ngoc-linh", "Ngọc Linh", "female"},
+	{"vieneu-thuc-doan", "Thục Đoan", "female"},
+}
+
+func vieNeuPreset(voiceID string) (string, bool) {
+	for _, voice := range vieNeuVoices {
+		if voice.id == voiceID {
+			return voice.preset, true
+		}
+	}
+	return "", false
+}
 
 func (a *App) offlineVoices() []ttsVoice {
 	voices := localVoices(a.config.PiperEnabled)
 	if a.config.VieNeuURL != "" {
-		voices = append(voices, ttsVoice{ID: vieNeuVoiceID, Provider: "vieneu", Name: "Thiền Tâm Đức · VieNeu Local", Language: "vi-VN", Gender: "male", Style: "narrator"})
+		for _, voice := range vieNeuVoices {
+			voices = append(voices, ttsVoice{ID: voice.id, Provider: "vieneu", Name: voice.preset + " · VieNeu Local", Language: "vi-VN", Gender: voice.gender, Style: "narrator"})
+		}
 	}
 	return voices
 }
 
-func (a *App) vieNeuAudio(ctx context.Context, text string) ([]byte, string, int, *apiError) {
+func (a *App) vieNeuAudio(ctx context.Context, voiceID, text string) ([]byte, string, int, *apiError) {
+	preset, ok := vieNeuPreset(voiceID)
+	if !ok {
+		return nil, "", 0, newAPIError(400, "TTS_VOICE_NOT_FOUND", "Không tìm thấy giọng VieNeu.")
+	}
 	if a.config.VieNeuURL == "" {
 		return nil, "", 0, newAPIError(503, "TTS_PROVIDER_UNAVAILABLE", "Chưa cấu hình VIENEU_API_URL.")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 240*time.Second)
 	defer cancel()
-	body, _ := json.Marshal(map[string]any{"input": text, "voice": "Thiền Tâm Đức", "response_format": "pcm", "sample_rate": 24000})
+	body, _ := json.Marshal(map[string]any{"input": text, "voice": preset, "response_format": "pcm", "sample_rate": 24000})
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, a.config.VieNeuURL+"/audio/speech", bytes.NewReader(body))
 	if err != nil {
 		return nil, "", 0, newAPIError(503, "TTS_PROVIDER_UNAVAILABLE", "Địa chỉ VieNeu không hợp lệ.")
@@ -38,7 +67,7 @@ func (a *App) vieNeuAudio(ctx context.Context, text string) ([]byte, string, int
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return nil, "", 0, newAPIError(502, "TTS_GENERATION_FAILED", "VieNeu không tạo được audio. Kiểm tra model và giọng Thiền Tâm Đức.")
+		return nil, "", 0, newAPIError(502, "TTS_GENERATION_FAILED", "VieNeu không tạo được audio. Kiểm tra model và giọng "+preset+".")
 	}
 	// PCM has no streaming WAV sentinel sizes: build a complete, seekable WAV.
 	const limit = 32 * 1024 * 1024

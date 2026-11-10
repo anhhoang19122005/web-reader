@@ -77,7 +77,8 @@ Dữ liệu được lưu trong các collection `books`, `chapters`, `reading_pr
 
 Đặt checkout VieNeu-TTS và môi trường Python đã cài tại `test/VieNeu-TTS`.
 `start-reader-vieneu.ps1` dùng API có sẵn `apps.openai_speech`, chỉ lắng nghe
-`127.0.0.1:8000`, chạy ONNX int8 trên CPU và giữ model trong RAM.
+`127.0.0.1:8000`, chạy ONNX fp32 trên CPU và giữ model trong RAM. Chỉ đặt
+`VIENEU_PRECISION=int8` nếu CPU có VNNI, nếu không audio có thể bị méo.
 Hai script Reader gọi helper này khi tìm thấy `.venv/Scripts/python.exe`.
 Đặt `VIENEU_ENABLED=false` nếu muốn bỏ qua hoặc cấu hình Go API thủ công:
 
@@ -86,7 +87,8 @@ VIENEU_API_URL=http://127.0.0.1:8000/v1
 ```
 
 Giọng xuất hiện trong provider `VieNeu · Local`. Preset nguồn có tên chính xác
-`Thiền Tâm Đức`. API v3 hiện bỏ qua tốc độ tổng hợp/cao độ, nên player khóa hai
+`Thiền Tâm Đức`, `Hải Đăng`, `Thiện Minh`, `Thanh Bình`, `Thái Sơn`, `Ngọc Linh`
+và `Thục Đoan`. API v3 hiện bỏ qua tốc độ tổng hợp/cao độ, nên player khóa hai
 thông số này; dùng `Tốc độ phát lại` để nghe nhanh/chậm. Cache, đọc liên tục và
 lưu tiến độ vẫn dùng luồng Reader hiện có. Không commit checkout hay model.
 

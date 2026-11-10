@@ -316,7 +316,7 @@ func (a *App) generateTTS(w http.ResponseWriter, r *http.Request) *apiError {
 	// pitch): chuẩn hóa trước khi hash/cache để cùng đoạn văn không sinh doc trùng.
 	// Edge/Saydi giữ nguyên giá trị request như cũ.
 	effectivePitch, effectiveVolume := request.Pitch, request.Volume
-	if request.VoiceID == vieNeuVoiceID {
+	if _, isVieNeu := vieNeuPreset(request.VoiceID); isVieNeu {
 		request.SpeakingRate, effectivePitch, effectiveVolume = 1, 0, 1
 	}
 	if isLocalVoiceID(request.VoiceID) {
@@ -493,7 +493,7 @@ func (a *App) synthesize(ctx context.Context, voice ttsVoice, text string, rate,
 		return mockAudio(duration), "audio/wav", duration, nil
 	}
 	if voice.Provider == "vieneu" {
-		return a.vieNeuAudio(ctx, text)
+		return a.vieNeuAudio(ctx, voice.ID, text)
 	}
 	if voice.Provider == "local" || isLocalVoiceID(voice.ID) {
 		return a.piperAudio(ctx, voice.ID, text, rate)

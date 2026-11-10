@@ -16,7 +16,9 @@ $oldPort = $env:PORT
 $oldHost = $env:HOST
 try {
     $env:PORT = '8000'; $env:HOST = '127.0.0.1'; $env:PYTHONUTF8 = '1'
-    $env:VIENEU_BACKEND = 'onnx'; $env:VIENEU_PRECISION = 'int8'
+    $env:VIENEU_BACKEND = 'onnx'
+    # int8 can distort audio on CPUs without VNNI; opt in with VIENEU_PRECISION=int8.
+    if (-not $env:VIENEU_PRECISION) { $env:VIENEU_PRECISION = 'fp32' }
     $process = Start-Process -FilePath $python -ArgumentList @('-m', 'apps.openai_speech') -WorkingDirectory $repo -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logs 'vieneu.stdout.log') -RedirectStandardError (Join-Path $logs 'vieneu.stderr.log')
 } finally { $env:PORT = $oldPort; $env:HOST = $oldHost }
 for ($i = 0; $i -lt 180; $i++) {
