@@ -23,7 +23,12 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-const maxTTSCharacters = 800
+// A chunk is one stretch of continuous listening: about 80 s of speech at most,
+// closed at the first paragraph end after about 45 s.
+const (
+	maxTTSCharacters       = 1200
+	paragraphTTSCharacters = 700
+)
 const saydiVoiceCacheTTL = 5 * time.Minute
 
 type ttsVoice struct {
@@ -650,7 +655,7 @@ func chunkText(text string) []ttsChunk {
 			flush()
 			pending, pendingStart, pendingEnd = append([]rune(nil), segment.text...), segment.start, segment.end
 		}
-		if segment.paragraphEnd && utf16Length(pending) >= 300 {
+		if segment.paragraphEnd && utf16Length(pending) >= paragraphTTSCharacters {
 			flush()
 		}
 	}

@@ -77,8 +77,14 @@ Dữ liệu được lưu trong các collection `books`, `chapters`, `reading_pr
 
 Đặt checkout VieNeu-TTS và môi trường Python đã cài tại `test/VieNeu-TTS`.
 `start-reader-vieneu.ps1` dùng API có sẵn `apps.openai_speech`, chỉ lắng nghe
-`127.0.0.1:8000`, chạy ONNX fp32 trên CPU và giữ model trong RAM. Chỉ đặt
-`VIENEU_PRECISION=int8` nếu CPU có VNNI, nếu không audio có thể bị méo.
+`127.0.0.1:8000` và giữ model trong RAM. Mặc định chạy ONNX fp32 trên CPU; chỉ
+đặt `VIENEU_PRECISION=int8` nếu CPU có VNNI, nếu không audio có thể bị méo.
+
+Nếu checkout đã cài bản GPU (`uv sync --frozen --extra cuda`, cần card NVIDIA),
+helper tự chạy backend PyTorch với 8 luồng và đặt `VIENEU_MAX_STREAMS` cho Go
+API. Mỗi luồng GPU chỉ chạy ngang tốc độ nghe, nên Go API cắt mỗi đoạn đọc theo
+ranh giới câu, tạo các phần song song rồi ghép lại: trên GTX 1650 Ti, 86 giây
+audio tạo xong trong khoảng 14 giây. Đặt `VIENEU_BACKEND=onnx` để ép về CPU.
 Hai script Reader gọi helper này khi tìm thấy `.venv/Scripts/python.exe`.
 Đặt `VIENEU_ENABLED=false` nếu muốn bỏ qua hoặc cấu hình Go API thủ công:
 

@@ -25,6 +25,7 @@ const singleUserID = "00000000-0000-0000-0000-000000000001"
 type Config struct {
 	AccessToken     string
 	VieNeuURL       string
+	VieNeuStreams   int
 	MongoURI        string
 	MongoDatabase   string
 	StorageProvider string
@@ -55,6 +56,8 @@ type App struct {
 	store         Storage
 	config        Config
 	saydiKeys     *saydiKeyManager
+	vieNeuOnce    sync.Once
+	vieNeuSlots   chan struct{}
 	saydiVoicesMu sync.Mutex
 	saydiVoices   []ttsVoice
 	saydiVoicesAt time.Time
@@ -87,6 +90,7 @@ func LoadConfig() Config {
 	return Config{
 		AccessToken:     os.Getenv("READER_ACCESS_TOKEN"),
 		VieNeuURL:       strings.TrimRight(os.Getenv("VIENEU_API_URL"), "/"),
+		VieNeuStreams:   envInt("VIENEU_MAX_STREAMS", 1),
 		MongoURI:        env("MONGODB_URI", "mongodb://localhost:27017"),
 		MongoDatabase:   env("MONGODB_DATABASE", "novel_reader"),
 		StorageProvider: env("STORAGE_PROVIDER", "local"),
