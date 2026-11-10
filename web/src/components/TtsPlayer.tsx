@@ -18,7 +18,7 @@ function ttsAudioKey(payload: TtsPayload, chunkText: string, provider: string) {
   return ["tts-audio", payload.chapterId, payload.chunkIndex, chunkText, provider, payload.voiceId, payload.speakingRate, payload.pitch, payload.volume] as const;
 }
 
-export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChange, onComplete, onLayoutChange }: { chapterId: string; initialPosition: number | undefined; onProgress: (position: number) => void; onChunkChange: (chunk: TtsChunk | null, info?: { auto: boolean }) => void; onComplete?: () => void; onLayoutChange?: () => void }) {
+export function TtsPlayer({ chapterId, nextChapterId, initialPosition, onProgress, onChunkChange, onComplete, onLayoutChange }: { chapterId: string; nextChapterId?: string; initialPosition: number | undefined; onProgress: (position: number) => void; onChunkChange: (chunk: TtsChunk | null, info?: { auto: boolean }) => void; onComplete?: () => void; onLayoutChange?: () => void }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [chunkIndex, setChunkIndex] = useState(-1);
   const pendingSeek = useRef<number | null>(null);
@@ -227,7 +227,24 @@ export function TtsPlayer({ chapterId, initialPosition, onProgress, onChunkChang
     }
   }
 
+  // Runs while the chapter's last chunk plays, so autoplay finds the next chapter ready.
+  // Same query keys as the next player's own, which then reuses the result or joins the request.
+  async function prefetchNextChapter() {
+    if (!nextChapterId || !selectedVoiceInfo || !useTtsSession.getState().running) return;
+    const nextChunks = await queryClient.fetchQuery({ queryKey: ["tts-chunks", nextChapterId], queryFn: () => getTtsChunks(nextChapterId), staleTime: 60_000 });
+    if (!nextChunks[0]) return;
+    const payload = { chapterId: nextChapterId, chunkIndex: 0, voiceId: selectedVoice, speakingRate: effectiveRate, pitch: effectivePitch, volume: 1 };
+    await queryClient.prefetchQuery({
+      queryKey: ttsAudioKey(payload, nextChunks[0].text, selectedVoiceInfo.provider),
+      queryFn: () => generateTts(payload),
+      staleTime: Infinity,
+      gcTime: ttsAudioCacheTime,
+      retry: false,
+    });
+  }
+
   async function prefetchNext(index: number) {
+    if (chunks.data && index === chunks.data.length - 1) return prefetchNextChapter();
     const version = settingsVersion.current;
     await Promise.allSettled([
       prefetchChunk(index + 1, index, version),
