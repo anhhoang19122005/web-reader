@@ -334,14 +334,14 @@ if (-not $tunnelUrl) {
     # Kept outside OneDrive: a cloud-only placeholder makes cloudflared time out reading it.
     $quickTunnelConfig = Join-Path ([IO.Path]::GetTempPath()) 'reader-quick-tunnel-config.yml'
     Set-Content -LiteralPath $quickTunnelConfig -Value 'no-autoupdate: true' -Encoding ascii
-    $tunnel = Start-Process -FilePath $cloudflared -ArgumentList @('tunnel', '--config', $quickTunnelConfig, '--url', $localApiUrl) -WindowStyle Hidden -PassThru -RedirectStandardError $log -RedirectStandardOutput "$log.stdout"
+    $tunnelProcess = Start-Process -FilePath $cloudflared -ArgumentList @('tunnel', '--config', $quickTunnelConfig, '--url', $localApiUrl) -WindowStyle Hidden -PassThru -RedirectStandardError $log -RedirectStandardOutput "$log.stdout"
     for ($i = 0; $i -lt 45; $i++) {
         Start-Sleep -Seconds 1
         if ((Test-Path -LiteralPath $log) -and (Get-Content -LiteralPath $log -Raw) -match 'https://[a-z0-9-]+\.trycloudflare\.com') { $tunnelUrl = $Matches[0]; break }
-        if ($tunnel.HasExited) { throw "Tunnel không khởi động được. Xem $log" }
+        if ($tunnelProcess.HasExited) { throw "Tunnel không khởi động được. Xem $log" }
     }
     if (-not $tunnelUrl) { throw "Không nhận được URL tunnel. Xem $log" }
-    @{ tunnelUrl = $tunnelUrl; tunnelPid = $tunnel.Id; port = $Port } | ConvertTo-Json | Set-Content -LiteralPath $statePath -Encoding utf8
+    @{ tunnelUrl = $tunnelUrl; tunnelPid = $tunnelProcess.Id; port = $Port } | ConvertTo-Json | Set-Content -LiteralPath $statePath -Encoding utf8
 }
 Write-Host "API tunnel: $tunnelUrl (được bảo vệ bằng token)"
 Write-Host "Tài khoản web nằm trong: $(Join-Path $work 'login.txt')"
