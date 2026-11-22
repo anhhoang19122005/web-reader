@@ -86,7 +86,7 @@ function useTypewriter(chunk: TtsChunk | null, text: string | undefined) {
     let frame = 0;
     const tick = () => {
       const audio = document.querySelector("audio");
-      const position = audio ? audioPosition(chunk, audio.currentTime + lead, audio.duration, text) : null;
+      const position = audio ? audioPosition(chunk, audio.currentTime + lead, audio.duration, text, useTtsSession.getState().marks) : null;
       if (position !== null) {
         const end = revealStop(text, position, chunk.endCharacter, follow === "sentence");
         // shortcut: after a resume jump only the last 240 characters get the effect, so a whole paragraph does not flash at once.

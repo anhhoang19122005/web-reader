@@ -281,6 +281,7 @@ export function TtsPlayer({ chapterId, nextChapterId, initialPosition, onProgres
       activeAudioKey.current = buffered ? request.audioKey : "";
       trimAudioBuffer(index, request.settings);
       setChunkIndex(index);
+      useTtsSession.setState({ marks: response.marks ?? [] });
       onChunkChange(request.chunk, { auto });
       audio.src = buffered?.url ?? apiUrl(response.audioUrl);
       audio.volume = volume;

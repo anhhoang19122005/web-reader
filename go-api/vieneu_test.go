@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -27,7 +28,7 @@ func TestVieNeuAudio(t *testing.T) {
 	}))
 	defer server.Close()
 	app := &App{config: Config{VieNeuURL: server.URL + "/v1"}}
-	wav, mime, duration, err := app.vieNeuAudio(context.Background(), vieNeuVoiceID, "Xin chào")
+	wav, mime, duration, _, err := app.vieNeuAudio(context.Background(), vieNeuVoiceID, "Xin chào")
 	if err != nil || mime != "audio/wav" || duration != 1000 || len(wav) != 48044 || string(wav[:4]) != "RIFF" || binary.LittleEndian.Uint32(wav[40:44]) != 48000 {
 		t.Fatalf("invalid WAV: mime=%s duration=%d err=%v", mime, duration, err)
 	}
@@ -43,10 +44,10 @@ func TestVieNeuAudio(t *testing.T) {
 		t.Fatalf("wrong VieNeu voice genders: %v", genders)
 	}
 	wantPreset = "Hải Đăng"
-	if _, _, _, err := app.vieNeuAudio(context.Background(), vieNeuHaiDangVoiceID, "Xin chào"); err != nil {
+	if _, _, _, _, err := app.vieNeuAudio(context.Background(), vieNeuHaiDangVoiceID, "Xin chào"); err != nil {
 		t.Fatalf("Hải Đăng synthesis failed: %v", err)
 	}
-	if _, _, _, err := app.vieNeuAudio(context.Background(), "vieneu-unknown", "Xin chào"); err == nil {
+	if _, _, _, _, err := app.vieNeuAudio(context.Background(), "vieneu-unknown", "Xin chào"); err == nil {
 		t.Fatal("unknown VieNeu voice must be rejected")
 	}
 }
@@ -63,14 +64,14 @@ func TestVieNeuAudioWaitsWhenServerBusy(t *testing.T) {
 	}))
 	defer server.Close()
 	app := &App{config: Config{VieNeuURL: server.URL + "/v1"}}
-	if _, _, duration, err := app.vieNeuAudio(context.Background(), vieNeuVoiceID, "Xin chào"); err != nil || duration != 1000 || calls != 2 {
+	if _, _, duration, _, err := app.vieNeuAudio(context.Background(), vieNeuVoiceID, "Xin chào"); err != nil || duration != 1000 || calls != 2 {
 		t.Fatalf("busy server must be retried: calls=%d duration=%d err=%v", calls, duration, err)
 	}
 	// A caller that gives up must not wait forever on a busy server.
 	calls = -1 << 30
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, _, _, err := app.vieNeuAudio(ctx, vieNeuVoiceID, "Xin chào"); err == nil {
+	if _, _, _, _, err := app.vieNeuAudio(ctx, vieNeuVoiceID, "Xin chào"); err == nil {
 		t.Fatal("cancelled request must fail")
 	}
 }
@@ -92,12 +93,25 @@ func TestVieNeuAudioSplitsAcrossStreams(t *testing.T) {
 	defer server.Close()
 	text := "A " + strings.Repeat("một hai ba bốn năm sáu bảy tám chín mười ", 5) + ". B " + strings.Repeat("một hai ba bốn năm sáu bảy tám chín mười ", 5) + ". C " + strings.Repeat("một hai ba bốn năm sáu bảy tám chín mười ", 5) + "."
 	app := &App{config: Config{VieNeuURL: server.URL + "/v1", VieNeuStreams: 8}}
-	wav, _, duration, err := app.vieNeuAudio(context.Background(), vieNeuVoiceID, text)
+	wav, _, duration, marks, err := app.vieNeuAudio(context.Background(), vieNeuVoiceID, text)
 	if err != nil || len(inputs) != 3 || duration != 3000 || len(wav) != 44+3*48000 || binary.LittleEndian.Uint32(wav[40:44]) != 3*48000 {
 		t.Fatalf("parts=%d duration=%d len=%d err=%v", len(inputs), duration, len(wav), err)
 	}
 	if wav[44] != 'A' || wav[44+48000] != 'B' || wav[44+96000] != 'C' {
 		t.Fatal("parts were joined out of order")
+	}
+	// Each mark pins a part's first letter to where its audio starts.
+	letters := func(s string) (n int) {
+		for _, r := range s {
+			if r != ' ' {
+				n++
+			}
+		}
+		return n
+	}
+	want := []ttsMark{{0, 0}, {1000, letters(text[:strings.Index(text, "B")])}, {2000, letters(text[:strings.Index(text, "C")])}}
+	if fmt.Sprint(marks) != fmt.Sprint(want) {
+		t.Fatalf("marks=%v want %v", marks, want)
 	}
 	if parts := splitVieNeuText(text, 1); len(parts) != 1 || parts[0] != text {
 		t.Fatalf("a single stream must keep the text whole: %d parts", len(parts))
@@ -109,6 +123,13 @@ func TestVieNeuAudioSplitsAcrossStreams(t *testing.T) {
 	for streams := 2; streams <= 16; streams++ {
 		if joined := strings.Join(splitVieNeuText(text, streams), " "); joined != strings.Join(strings.Fields(text), " ") {
 			t.Fatalf("streams=%d changed the text: %q", streams, joined)
+		}
+	}
+	// A closing quote after `?` must not become a part of its own: VieNeu returns no audio for it.
+	quoted := strings.Repeat("“Ngươi thật sự muốn đi sao, một hai ba bốn năm sáu bảy tám chín mười?” ", 6) + "“Đi!”"
+	for _, part := range splitVieNeuText(quoted, len(quoted)) {
+		if !hasSpeech([]rune(part)) {
+			t.Fatalf("part without speech: %q", part)
 		}
 	}
 }
@@ -123,7 +144,7 @@ func TestVieNeuLocalIntegration(t *testing.T) {
 	app := &App{config: Config{VieNeuURL: url, VieNeuStreams: envInt("VIENEU_MAX_STREAMS", 1)}}
 	text := strings.Repeat("Đêm hôm ấy trời không trăng, gió thổi qua rừng trúc nghe như tiếng ai than khóc. Lão già chống gậy bước ra sân, khẽ hỏi: Ngươi thật sự muốn đi sao? ", 8)
 	started := time.Now()
-	wav, _, duration, err := app.vieNeuAudio(context.Background(), vieNeuVoiceID, text)
+	wav, _, duration, _, err := app.vieNeuAudio(context.Background(), vieNeuVoiceID, text)
 	if err != nil || duration <= 0 {
 		t.Fatalf("local synthesis failed: %v", err)
 	}

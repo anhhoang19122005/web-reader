@@ -42,7 +42,9 @@ export type ReadingProgress = {
 
 export type TtsVoice = { id: string; provider: string; name: string; language: string; gender: string; style: string };
 export type TtsChunk = { chunkIndex: number; text: string; startCharacter: number; endCharacter: number };
-export type TtsGenerateResponse = { audioUrl: string; mimeType: string; durationMs: number; chunkIndex: number; startCharacter: number; endCharacter: number; cached: boolean };
+// The text after the chunk's first `nonSpace` non-whitespace UTF-16 units starts at `ms` of the audio.
+export type TtsMark = { ms: number; nonSpace: number };
+export type TtsGenerateResponse = { audioUrl: string; mimeType: string; durationMs: number; chunkIndex: number; startCharacter: number; endCharacter: number; cached: boolean; marks?: TtsMark[] };
 export type Bookmark = { id: string; chapterId: string; characterPosition: number; note: string | null; excerpt?: string; chapterTitle?: string; createdAt: string };
 
 type ApiError = { message?: string };

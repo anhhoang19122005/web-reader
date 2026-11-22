@@ -55,6 +55,16 @@ type ttsResponse struct {
 	StartCharacter int    `json:"startCharacter"`
 	EndCharacter   int    `json:"endCharacter"`
 	Cached         bool   `json:"cached"`
+	// Exact audio times for points in the chunk text; empty when the provider gives none.
+	Marks []ttsMark `json:"marks,omitempty"`
+}
+
+// ttsMark says the text after the chunk's first NonSpace non-whitespace UTF-16
+// units starts being spoken at MS. Whitespace is skipped because chunk text
+// and its parts rejoin sentences with single spaces.
+type ttsMark struct {
+	MS       int `json:"ms" bson:"ms"`
+	NonSpace int `json:"nonSpace" bson:"nonSpace"`
 }
 
 type chapterForTTS struct {
@@ -362,17 +372,22 @@ func (a *App) generateTTSAudio(ctx context.Context, chapter chapterForTTS, chunk
 		"chapterId": chapter.ID.String(), "chunkIndex": chunk.ChunkIndex, "voiceId": voiceID,
 		"speakingRate": rate, "pitch": effectivePitch, "volume": effectiveVolume, "textHash": textHash,
 	}).Decode(&cached)
-	if err == nil && !a.localAudioMissing(cached.AudioStorageKey) {
+	// VieNeu audio cached before marks existed would keep the running text out of sync.
+	unmarked := err == nil && strings.HasPrefix(voiceID, "vieneu-") && len(cached.Marks) == 0
+	if err == nil && !unmarked && !a.localAudioMissing(cached.AudioStorageKey) {
 		cachedID, parseErr := uuid.Parse(cached.ID)
 		if parseErr != nil {
 			return ttsResponse{}, databaseError(parseErr)
 		}
-		return ttsResponse{AudioURL: "/tts/audio/" + cachedID.String(), MimeType: cached.MimeType, DurationMS: cached.DurationMS, ChunkIndex: cached.ChunkIndex, StartCharacter: cached.StartCharacter, EndCharacter: cached.EndCharacter, Cached: true}, nil
+		return ttsResponse{AudioURL: "/tts/audio/" + cachedID.String(), MimeType: cached.MimeType, DurationMS: cached.DurationMS, ChunkIndex: cached.ChunkIndex, StartCharacter: cached.StartCharacter, EndCharacter: cached.EndCharacter, Cached: true, Marks: cached.Marks}, nil
 	}
 	if err == nil {
-		// The record outlived its local file, which would 404 forever; drop it and synthesize again.
+		// The record outlived its local file (which would 404 forever) or has no marks; drop it and synthesize again.
 		if _, err := a.collection(audioCollection).DeleteOne(ctx, bson.M{"_id": cached.ID}); err != nil {
 			return ttsResponse{}, databaseError(err)
+		}
+		if unmarked {
+			_ = a.store.Delete(ctx, cached.AudioStorageKey)
 		}
 	} else if !errorsIsNoRows(err) {
 		return ttsResponse{}, databaseError(err)
@@ -389,7 +404,7 @@ func (a *App) generateTTSAudio(ctx context.Context, chapter chapterForTTS, chunk
 		return ttsResponse{}, newAPIError(http.StatusBadRequest, "TTS_VOICE_NOT_FOUND", "Không tìm thấy voice tiếng Việt.")
 	}
 
-	audio, mimeType, durationMS, synthesisErr := a.synthesize(ctx, *voice, chunk.Text, rate, effectivePitch, effectiveVolume)
+	audio, mimeType, durationMS, marks, synthesisErr := a.synthesize(ctx, *voice, chunk.Text, rate, effectivePitch, effectiveVolume)
 	if synthesisErr != nil {
 		return ttsResponse{}, synthesisErr
 	}
@@ -406,13 +421,13 @@ func (a *App) generateTTSAudio(ctx context.Context, chapter chapterForTTS, chunk
 		ID: audioID.String(), ChapterID: chapter.ID.String(), ChunkIndex: chunk.ChunkIndex, TextHash: textHash, Text: chunk.Text,
 		VoiceID: voice.ID, SpeakingRate: rate, Pitch: effectivePitch, Volume: effectiveVolume,
 		StartCharacter: chunk.StartCharacter, EndCharacter: chunk.EndCharacter, AudioStorageKey: storageKey,
-		MimeType: mimeType, DurationMS: durationMS, CreatedAt: time.Now().UTC(),
+		MimeType: mimeType, DurationMS: durationMS, Marks: marks, CreatedAt: time.Now().UTC(),
 	})
 	if err != nil {
 		_ = a.store.Delete(ctx, storageKey)
 		return ttsResponse{}, databaseError(err)
 	}
-	return ttsResponse{AudioURL: "/tts/audio/" + audioID.String(), MimeType: mimeType, DurationMS: durationMS, ChunkIndex: chunk.ChunkIndex, StartCharacter: chunk.StartCharacter, EndCharacter: chunk.EndCharacter}, nil
+	return ttsResponse{AudioURL: "/tts/audio/" + audioID.String(), MimeType: mimeType, DurationMS: durationMS, ChunkIndex: chunk.ChunkIndex, StartCharacter: chunk.StartCharacter, EndCharacter: chunk.EndCharacter, Marks: marks}, nil
 }
 
 // Only local files are checked: a remote store would need a network round trip per cache hit.
@@ -492,13 +507,19 @@ func (a *App) ownedChapter(ctx context.Context, chapterID uuid.UUID) (chapterFor
 	return chapterForTTS{ID: chapterID, BookID: bookID, PlainText: chapterDocument.PlainText}, nil
 }
 
-func (a *App) synthesize(ctx context.Context, voice ttsVoice, text string, rate, pitch, volume float64) ([]byte, string, int, *apiError) {
+// synthesize returns marks only for VieNeu; the others leave the web to estimate.
+func (a *App) synthesize(ctx context.Context, voice ttsVoice, text string, rate, pitch, volume float64) ([]byte, string, int, []ttsMark, *apiError) {
+	if voice.Provider == "vieneu" {
+		return a.vieNeuAudio(ctx, voice.ID, text)
+	}
+	audio, mimeType, duration, err := a.synthesizeUnmarked(ctx, voice, text, rate, pitch, volume)
+	return audio, mimeType, duration, nil, err
+}
+
+func (a *App) synthesizeUnmarked(ctx context.Context, voice ttsVoice, text string, rate, pitch, volume float64) ([]byte, string, int, *apiError) {
 	duration := maxInt(800, len([]rune(text))*35)
 	if voice.Provider == "mock" {
 		return mockAudio(duration), "audio/wav", duration, nil
-	}
-	if voice.Provider == "vieneu" {
-		return a.vieNeuAudio(ctx, voice.ID, text)
 	}
 	if voice.Provider == "local" || isLocalVoiceID(voice.ID) {
 		return a.piperAudio(ctx, voice.ID, text, rate)

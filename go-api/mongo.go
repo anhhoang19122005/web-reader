@@ -80,6 +80,7 @@ type mongoAudioChunk struct {
 	AudioStorageKey string    `bson:"audioStorageKey"`
 	MimeType        string    `bson:"mimeType"`
 	DurationMS      int       `bson:"durationMs"`
+	Marks           []ttsMark `bson:"marks,omitempty"`
 	CreatedAt       time.Time `bson:"createdAt"`
 }
 

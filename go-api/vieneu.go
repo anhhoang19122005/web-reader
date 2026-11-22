@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf16"
 )
 
 const (
@@ -46,24 +48,27 @@ func (a *App) offlineVoices() []ttsVoice {
 	return voices
 }
 
-// vieNeuPartCharacters is the smallest text worth its own stream: a sentence or
-// two, the unit VieNeu already synthesizes independently inside one request.
-const vieNeuPartCharacters = 140
+// vieNeuPartCharacters is the smallest text worth its own part: about a sentence,
+// the unit VieNeu already synthesizes independently inside one request.
+const vieNeuPartCharacters = 60
 
 // vieNeuAudio synthesizes one reader chunk. A GPU server runs each stream at
 // about real time but serves several at once, so the chunk is split at
-// sentence boundaries and the parts are generated in parallel.
-func (a *App) vieNeuAudio(ctx context.Context, voiceID, text string) ([]byte, string, int, *apiError) {
+// sentence boundaries and the parts are generated in parallel. Where each
+// part starts in the joined audio is returned as marks for the running text.
+func (a *App) vieNeuAudio(ctx context.Context, voiceID, text string) ([]byte, string, int, []ttsMark, *apiError) {
 	preset, ok := vieNeuPreset(voiceID)
 	if !ok {
-		return nil, "", 0, newAPIError(400, "TTS_VOICE_NOT_FOUND", "Không tìm thấy giọng VieNeu.")
+		return nil, "", 0, nil, newAPIError(400, "TTS_VOICE_NOT_FOUND", "Không tìm thấy giọng VieNeu.")
 	}
 	if a.config.VieNeuURL == "" {
-		return nil, "", 0, newAPIError(503, "TTS_PROVIDER_UNAVAILABLE", "Chưa cấu hình VIENEU_API_URL.")
+		return nil, "", 0, nil, newAPIError(503, "TTS_PROVIDER_UNAVAILABLE", "Chưa cấu hình VIENEU_API_URL.")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 240*time.Second)
 	defer cancel()
-	parts := splitVieNeuText(text, a.vieNeuStreams())
+	// One part per vieNeuPartCharacters, not per stream, so the marks are a
+	// sentence or two apart; vieNeuSlots still caps how many run at once.
+	parts := splitVieNeuText(text, len(text))
 	audio := make([][]byte, len(parts))
 	failures := make([]*apiError, len(parts))
 	var group sync.WaitGroup
@@ -83,17 +88,27 @@ func (a *App) vieNeuAudio(ctx context.Context, voiceID, text string) ([]byte, st
 			// Report the part that failed first, not the ones cancelled because of it.
 			for _, failure := range failures {
 				if failure != nil && failure.Code != "TTS_PROVIDER_UNAVAILABLE" {
-					return nil, "", 0, failure
+					return nil, "", 0, nil, failure
 				}
 			}
-			return nil, "", 0, failures[index]
+			return nil, "", 0, nil, failures[index]
 		}
+	}
+	marks := make([]ttsMark, 0, len(parts))
+	size, nonSpace := 0, 0
+	for index, part := range parts {
+		marks = append(marks, ttsMark{MS: size * 1000 / 48000, NonSpace: nonSpace})
 		size += len(audio[index])
+		for _, r := range part {
+			if !unicode.IsSpace(r) {
+				nonSpace += utf16.RuneLen(r)
+			}
+		}
 	}
 	// PCM has no streaming WAV sentinel sizes: build a complete, seekable WAV.
 	const limit = 64 * 1024 * 1024
 	if size < 2 || size > limit {
-		return nil, "", 0, newAPIError(502, "TTS_GENERATION_FAILED", "VieNeu trả về audio không hợp lệ hoặc quá dài.")
+		return nil, "", 0, nil, newAPIError(502, "TTS_GENERATION_FAILED", "VieNeu trả về audio không hợp lệ hoặc quá dài.")
 	}
 	wav := make([]byte, 44, 44+size)
 	copy(wav, "RIFF")
@@ -111,7 +126,7 @@ func (a *App) vieNeuAudio(ctx context.Context, voiceID, text string) ([]byte, st
 	for _, pcm := range audio {
 		wav = append(wav, pcm...)
 	}
-	return wav, "audio/wav", size * 1000 / 48000, nil
+	return wav, "audio/wav", size * 1000 / 48000, marks, nil
 }
 
 func (a *App) vieNeuStreams() int {
@@ -162,10 +177,29 @@ func (a *App) vieNeuPCM(ctx context.Context, preset, text string) ([]byte, *apiE
 	return pcm, nil
 }
 
+func hasSpeech(text []rune) bool {
+	for _, r := range text {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return true
+		}
+	}
+	return false
+}
+
 // splitVieNeuText cuts text into at most `streams` parts of similar length,
 // only ever between sentences.
 func splitVieNeuText(text string, streams int) []string {
-	segments := sentenceSegments([]rune(text))
+	runes := []rune(text)
+	// VieNeu returns no audio for text without letters, such as the closing
+	// quote the segmenter leaves after `?”`; keep such text with its sentence.
+	var segments []textSegment
+	for _, segment := range sentenceSegments(runes) {
+		if last := len(segments) - 1; last >= 0 && (!hasSpeech(segment.text) || !hasSpeech(segments[last].text)) {
+			segments[last].text, segments[last].end = runes[segments[last].start:segment.end], segment.end
+			continue
+		}
+		segments = append(segments, segment)
+	}
 	total := 0
 	for _, segment := range segments {
 		total += len(segment.text)
