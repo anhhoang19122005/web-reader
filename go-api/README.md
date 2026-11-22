@@ -22,7 +22,7 @@ Khi có `SAYDI_API_KEYS`, API tự lấy danh sách voice tiếng Việt từ Sa
 
 ## Giọng local offline (Piper, miễn phí 100%)
 
-`start-reader-go.ps1` tự tải `piper.exe` (Windows), 2 model Việt (~63MB/giọng) và
+`reader.ps1` tự tải `piper.exe` (Windows), 2 model Việt (~63MB/giọng) và
 `espeak-ng-data` vào `tools/piper/` khi chạy lần đầu:
 
 - **Duy Siêu Trầm** (`local-duyoryx-sieutram`): nam siêu trầm, uy nghiêm quyền lực, kiểu Tào Tháo — mặc định khi có local.
@@ -39,10 +39,10 @@ giữ `PIPER_ENABLED=true` và xem hướng dẫn bên dưới.
 Sau đó chạy tại thư mục `Reader`:
 
 ```powershell
-.\start-reader-go.ps1
+.\reader.ps1
 ```
 
-Script tự cài Go bằng `winget` nếu máy chưa có, chạy index migration và mở Go API ở `http://localhost:8081/api` cùng web ở `http://localhost:3000`.
+Script tự cài Go (và các công cụ khác) bằng `winget` nếu máy chưa có, chạy index migration và mở Go API ở `http://localhost:8081/api` cùng web ở `http://localhost:3000`.
 
 Chạy thủ công:
 
@@ -75,8 +75,9 @@ Dữ liệu được lưu trong các collection `books`, `chapters`, `reading_pr
 
 ### Thiền Tâm Đức — VieNeu local
 
-Đặt checkout VieNeu-TTS và môi trường Python đã cài tại `test/VieNeu-TTS`.
-`start-reader-vieneu.ps1` dùng API có sẵn `apps.openai_speech`, chỉ lắng nghe
+`reader.ps1` tự clone VieNeu-TTS (commit đã kiểm tra) vào `test/VieNeu-TTS` và
+chạy `uv sync --frozen` (thêm `--extra cuda` khi có `nvidia-smi`) nếu `.venv`
+thiếu hoặc hỏng, ví dụ khi thư mục được chép từ máy khác. Server dùng API có sẵn `apps.openai_speech`, chỉ lắng nghe
 `127.0.0.1:8000` và giữ model trong RAM. Mặc định chạy ONNX fp32 trên CPU; chỉ
 đặt `VIENEU_PRECISION=int8` nếu CPU có VNNI, nếu không audio có thể bị méo.
 
@@ -85,7 +86,7 @@ helper tự chạy backend PyTorch với 8 luồng và đặt `VIENEU_MAX_STREAM
 API. Mỗi luồng GPU chỉ chạy ngang tốc độ nghe, nên Go API cắt mỗi đoạn đọc theo
 ranh giới câu, tạo các phần song song rồi ghép lại: trên GTX 1650 Ti, 86 giây
 audio tạo xong trong khoảng 14 giây. Đặt `VIENEU_BACKEND=onnx` để ép về CPU.
-Hai script Reader gọi helper này khi tìm thấy `.venv/Scripts/python.exe`.
+Nếu VieNeu không khởi động được, script cảnh báo và chạy tiếp không có giọng VieNeu.
 Đặt `VIENEU_ENABLED=false` nếu muốn bỏ qua hoặc cấu hình Go API thủ công:
 
 ```text
@@ -101,7 +102,7 @@ lưu tiến độ vẫn dùng luồng Reader hiện có. Không commit checkout 
 Khi cập nhật API đang chạy bằng script home:
 
 ```powershell
-pwsh -File .\start-reader-home.ps1 -Restart -Publish
+.\reader.ps1 -Restart -Publish
 ```
 
 `-Restart` chỉ dừng binary API được script quản lý và kiểm tra đúng path/PID.

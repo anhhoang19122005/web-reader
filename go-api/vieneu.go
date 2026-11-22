@@ -138,7 +138,7 @@ func (a *App) vieNeuPCM(ctx context.Context, preset, text string) ([]byte, *apiE
 		request.Header.Set("Content-Type", "application/json")
 		response, err = http.DefaultClient.Do(request)
 		if err != nil {
-			return nil, newAPIError(503, "TTS_PROVIDER_UNAVAILABLE", "Không kết nối được VieNeu. Hãy chạy start-reader-vieneu.ps1.")
+			return nil, newAPIError(503, "TTS_PROVIDER_UNAVAILABLE", "Không kết nối được VieNeu. Hãy chạy reader.ps1.")
 		}
 		if response.StatusCode != http.StatusTooManyRequests {
 			break

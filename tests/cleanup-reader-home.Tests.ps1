@@ -1,7 +1,7 @@
 #requires -Version 7.4
 # Run: pwsh -NoProfile -File tests/cleanup-reader-home.Tests.ps1
 $ErrorActionPreference = 'Stop'
-$cleanupScript = Join-Path (Split-Path $PSScriptRoot) 'cleanup-reader-home.ps1'
+$cleanupScript = Join-Path (Split-Path $PSScriptRoot) 'reader.ps1'
 $testDirectory = Join-Path ([IO.Path]::GetTempPath()) "reader-cleanup-test-$([guid]::NewGuid())"
 New-Item -ItemType Directory -Path $testDirectory | Out-Null
 function Assert($condition, $message) { if (!$condition) { throw $message } }
@@ -35,14 +35,14 @@ function Set-Fixture {
 }
 try {
     Set-Fixture
-    & $cleanupScript -DeployDirectory $testDirectory
+    & $cleanupScript -Cleanup -DeployDirectory $testDirectory
     Assert ($global:readerCleanupTestStopped.Count -eq 0) 'Cleanup without publish stopped running processes'
     Assert (Test-Path (Join-Path $testDirectory 'reader-home-api-8087.exe')) 'Running old backend was deleted before publish'
     Assert (!(Test-Path (Join-Path $testDirectory 'reader-home-api.exe'))) 'Unused legacy binary was retained'
     Assert (Test-Path (Join-Path $testDirectory 'tunnel-1.log')) 'Logs were deleted while another tunnel was running'
 
     Set-Fixture
-    & $cleanupScript -DeployDirectory $testDirectory -RetireProcesses -PreviousPort 8087 -PreviousTunnelPid 21
+    & $cleanupScript -Cleanup -DeployDirectory $testDirectory -RetireProcesses -PreviousPort 8087 -PreviousTunnelPid 21
     Assert (($global:readerCleanupTestStopped | Sort-Object) -join ',' -eq '11,21') 'Cleanup stopped wrong processes'
     Assert (!(Test-Path (Join-Path $testDirectory 'reader-home-api-8087.exe'))) 'Old binary was retained after publish'
     Assert (!(Test-Path (Join-Path $testDirectory 'tunnel-1.log'))) 'Old tunnel log was retained'
@@ -53,7 +53,7 @@ try {
     Set-Fixture
     $global:readerCleanupTestHealth = 'DOWN'
     $blocked = $false
-    try { & $cleanupScript -DeployDirectory $testDirectory -RetireProcesses } catch { $blocked = $true }
+    try { & $cleanupScript -Cleanup -DeployDirectory $testDirectory -RetireProcesses } catch { $blocked = $true }
     Assert $blocked 'Unhealthy replacement did not block cleanup'
     Assert ($global:readerCleanupTestStopped.Count -eq 0) 'Unhealthy replacement stopped old processes'
     Assert (Test-Path (Join-Path $testDirectory 'reader-home-api.exe')) 'Unhealthy replacement deleted old binary'

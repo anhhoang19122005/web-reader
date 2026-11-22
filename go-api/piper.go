@@ -4,7 +4,7 @@ package readerapi
 // Hai giọng Việt miễn phí:
 //   - local-duyoryx-sieutram: Duy Siêu Trầm, uy nghiêm quyền lực (kiểu Tào Tháo).
 //   - local-ngocngan-kechuyen: Ngọc Ngạn, trầm ấm kể chuyện.
-// Windows: start-reader-go.ps1 tải piper.exe; Docker: cài Piper Linux + models.
+// Windows: reader.ps1 tải piper.exe; Docker: cài Piper Linux + models.
 // Vercel Functions dùng PIPER_ENABLED=false; deploy container dùng true.
 
 import (
@@ -87,7 +87,7 @@ func (a *App) piperAudio(ctx context.Context, voiceID, text string, rate float64
 	}
 	for _, path := range []string{a.config.PiperBin, model, config, a.config.PiperEspeakData} {
 		if _, err := os.Stat(path); err != nil {
-			return nil, "", 0, newAPIError(http.StatusServiceUnavailable, "TTS_PROVIDER_UNAVAILABLE", "Giọng local chưa được cài. Hãy chạy lại start-reader-go.ps1 để tự tải Piper.")
+			return nil, "", 0, newAPIError(http.StatusServiceUnavailable, "TTS_PROVIDER_UNAVAILABLE", "Giọng local chưa được cài. Hãy chạy lại reader.ps1 để tự tải Piper.")
 		}
 	}
 	if rate < 0.5 {

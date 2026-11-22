@@ -47,7 +47,7 @@ export type Bookmark = { id: string; chapterId: string; characterPosition: numbe
 
 type ApiError = { message?: string };
 
-const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api";
+const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8081/api";
 export const apiUrl = (path: string) => `${baseUrl}${path}`;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

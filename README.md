@@ -4,11 +4,16 @@
 
 ### Bản cá nhân: web Vercel, API/Piper trên máy Windows
 
-Web hiện ở `https://web-reader-six.vercel.app`. Trong PowerShell 7.4 trở lên,
-chạy tại thư mục Reader sau khi máy khởi động lại:
+Mọi thứ chạy bằng một file `reader.ps1` tại thư mục Reader. Trên máy Windows mới
+chỉ cần thư mục Reader và file `.env` (chép từ `.env.example`); script tự cài
+PowerShell 7, Go, Node.js, Git, uv, cloudflared, Vercel CLI, Piper và VieNeu
+khi thiếu. Nếu PowerShell chặn script:
+`powershell -ExecutionPolicy Bypass -File .\reader.ps1`.
+
+Web hiện ở `https://web-reader-six.vercel.app`. Sau khi máy khởi động lại:
 
 ```powershell
-pwsh -File .\start-reader-home.ps1 -Publish
+.\reader.ps1 -Publish
 ```
 
 Script giữ nguyên thư viện/tiến độ Atlas và storage theo `.env`, chạy API riêng
@@ -20,17 +25,18 @@ khởi động lại; `-Publish` cập nhật địa chỉ mới và redeploy we
 Tài khoản `reader` và mật khẩu tự tạo nằm trong `.reader-deploy/login.txt`.
 Không commit hoặc chia sẻ `.reader-deploy/credentials.json`: nó chứa khóa API.
 Khóa chỉ đặt phía server của Vercel, không có trong JavaScript frontend.
-Đăng nhập Vercel CLI bằng `vercel login` nếu script yêu cầu. Lần đầu cần link
-project: `cd web; vercel link --yes --project web-reader`.
+Lần đầu script mở `vercel login` và tự link project `web-reader`.
+`-Tunnel` chỉ chạy API + tunnel mà không redeploy; `-Restart` build lại API
+sau khi sửa backend.
 
 Không cấu hình `READER_ACCESS_TOKEN` thì API local vẫn giữ hành vi cũ; chỉ
 API dành cho tunnel mới bật bảo vệ token. Mật khẩu web dùng HTTP Basic qua HTTPS.
 
 ```powershell
-.\start-reader-go.ps1
+.\reader.ps1
 ```
 
-Lệnh này tự cài Go nếu thiếu, chạy migration MongoDB Atlas, Go API tại `http://localhost:8081/api` và web tại `http://localhost:3000`. Backend duy nhất nằm trong [`go-api`](go-api/README.md), dùng Edge-TTS trực tiếp bằng Go và thêm SaydiVoice khi có `SAYDI_API_KEYS`, cùng cấu hình deploy Vercel + Supabase.
+Không có tham số là chế độ dev: chạy migration MongoDB Atlas, Go API tại `http://localhost:8081/api` và web tại `http://localhost:3000`. Backend duy nhất nằm trong [`go-api`](go-api/README.md), dùng Edge-TTS trực tiếp bằng Go và thêm SaydiVoice khi có `SAYDI_API_KEYS`, cùng cấu hình deploy Vercel + Supabase.
 
 Mở `http://localhost:3000/library` để upload EPUB/PDF, chọn chapter và đọc. Tiến độ, dấu trang, theme, cỡ chữ và player TTS được lưu theo user mặc định single-user.
 

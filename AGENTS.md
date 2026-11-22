@@ -7,12 +7,12 @@
 
 ## Docker & DB
 
-- Go uses MongoDB Atlas. Set `MONGODB_URI` and `MONGODB_DATABASE` in the root `.env` before running `start-reader-go.ps1`.
+- Go uses MongoDB Atlas. Set `MONGODB_URI` and `MONGODB_DATABASE` in the root `.env` before running `reader.ps1`.
 - Migration creates MongoDB indexes automatically on Go startup (`AUTO_MIGRATE=true`). To run manually: `go run ./cmd/migrate` from `go-api/`.
 
 ## Environment
 
-- `.env` at repo root is read by both PowerShell scripts. Key vars:
+- `.env` at repo root is read by `reader.ps1`. Key vars:
   - `MONGODB_URI`, `MONGODB_DATABASE`
   - `NEXT_PUBLIC_API_BASE_URL` (e.g. `http://localhost:8081/api`)
   - `CORS_ALLOWED_ORIGINS` (must include `http://localhost:3000`)
