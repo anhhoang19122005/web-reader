@@ -14,6 +14,14 @@ assert.equal(audioPosition(chunks[1], 12, 10), 210);
 assert.equal(audioPosition(chunks[1], -1, 10), 110);
 assert.equal(audioPosition(chunks[1], 5, Infinity), null);
 assert.equal(audioPosition(chunks[1], 5, 0), null);
+// With chapter text, time spent pausing at punctuation holds the position at the punctuation mark.
+const spoken = "Ab. Cd";
+const whole = { chunkIndex: 0, startCharacter: 0, endCharacter: spoken.length, text: spoken };
+assert.equal(audioPosition(whole, 0, 14, spoken), 0);
+assert.equal(audioPosition(whole, 6, 14, spoken), 2);
+assert.equal(audioPosition(whole, 10, 14, spoken), 2);
+assert.equal(audioPosition(whole, 12, 14, spoken), 4);
+assert.equal(audioPosition(whole, 14, 14, spoken), spoken.length);
 // Running text: a word ends at whitespace, a sentence at punctuation followed by whitespace.
 const line = "Hắn bước đi. Gió nổi lên! Trời tối";
 assert.equal(revealStop(line, 2, line.length, false), 3);

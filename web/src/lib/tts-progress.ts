@@ -15,8 +15,22 @@ export function revealStop(text: string, from: number, limit: number, sentence: 
   return end;
 }
 
-export function audioPosition(chunk: TtsChunk, currentTime: number, duration: number) {
+// Extra time, in characters, the voice pauses after punctuation and line breaks.
+const pauseWeight = (char: string) => /[.!?…\n]/.test(char) ? 8 : /[,;:—–]/.test(char) ? 4 : 0;
+
+export function audioPosition(chunk: TtsChunk, currentTime: number, duration: number, chapterText?: string) {
   if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(currentTime)) return null;
-  // ponytail: estimate characters by audio time; word timestamps are needed for exact alignment.
-  return chunk.startCharacter + Math.floor(Math.max(0, Math.min(1, currentTime / duration)) * (chunk.endCharacter - chunk.startCharacter));
+  const fraction = Math.max(0, Math.min(1, currentTime / duration));
+  if (chapterText === undefined) return chunk.startCharacter + Math.floor(fraction * (chunk.endCharacter - chunk.startCharacter));
+  // shortcut: pauses are estimated from punctuation; provider word timestamps would make this exact.
+  const span = chapterText.slice(chunk.startCharacter, chunk.endCharacter);
+  let total = 0;
+  for (const char of span) total += char.length + pauseWeight(char);
+  let target = fraction * total, index = 0;
+  for (const char of span) {
+    target -= char.length + pauseWeight(char);
+    if (target < 0) break;
+    index += char.length;
+  }
+  return chunk.startCharacter + index;
 }
