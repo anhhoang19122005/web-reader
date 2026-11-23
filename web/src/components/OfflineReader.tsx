@@ -6,6 +6,8 @@
 import { useEffect, useRef, useState } from "react";
 import { type Book, type Chapter } from "../lib/api";
 import { useReadingPreferences } from "../lib/reading-preferences";
+import { readingFontFamily } from "../lib/reading-fonts";
+import { useReadingFont } from "../lib/use-reading-font";
 import { scrollToCharacter, visibleCharacter } from "../lib/reader-position";
 import { offlineProgressKey } from "./PwaSupport";
 
@@ -16,6 +18,7 @@ export function OfflineReader() {
   const [error, setError] = useState("");
   const text = useRef<HTMLDivElement | null>(null);
   const prefs = useReadingPreferences();
+  useReadingFont(prefs.font);
   const item = items.find((entry) => entry.chapter.id === active);
   useEffect(() => { void (async () => {
     try {
@@ -60,5 +63,5 @@ export function OfflineReader() {
     window.addEventListener("wheel", mark, { passive: true }); window.addEventListener("touchmove", mark, { passive: true }); window.addEventListener("scroll", scroll, { passive: true }); window.addEventListener("keydown", scrollKey);
     return () => { cancelAnimationFrame(frame); clearTimeout(timer); window.removeEventListener("wheel", mark); window.removeEventListener("touchmove", mark); window.removeEventListener("scroll", scroll); window.removeEventListener("keydown", scrollKey); };
   }, [item]);
-  return <main className="app-surface min-h-screen"><header className="site-header"><a className="wordmark" href="/library">Gác Sách</a><button onClick={() => { setActive(""); window.scrollTo(0,0); }}>Sách offline</button></header><section className="reader-column px-6 py-8" style={{ maxWidth: `${prefs.columnWidth}ch` }}><h1 className="book-title">{item?.bookTitle ?? "Chương đã lưu trên thiết bị"}</h1><p className="subtle mt-3">Lưu tự động các chương đã mở · tối đa 40 mục dữ liệu. Tiến độ đọc offline sẽ gửi khi có mạng. Giọng đọc cần kết nối API.</p>{!ready && <p role="status">Đang mở bộ nhớ offline…</p>}{error && <p role="alert">{error}</p>}{item ? <><h2 className="book-title mt-8">{item.chapter.title}</h2><div ref={text} className="reader-text whitespace-pre-line mt-8" style={{ fontSize: prefs.fontSize, lineHeight: prefs.lineHeight, fontFamily: prefs.font === "serif" ? "var(--font-reader-serif), Georgia, serif" : "Arial, Helvetica, sans-serif" }}><span data-start="0" data-end={item.chapter.plainText.length}>{item.chapter.plainText}</span></div><p className="mt-8"><a href={`/reader/${item.bookId}/${item.chapter.id}`}>Mở Reader khi có kết nối</a></p></> : <><ol className="chapter-list">{items.map((entry) => <li key={entry.chapter.id}><button onClick={() => { setActive(entry.chapter.id); window.scrollTo(0,0); }}>{entry.bookTitle} · {entry.chapter.title}</button></li>)}</ol>{ready && !items.length && <p className="mt-8">Chưa có chương offline. Mở một chương khi có mạng để lưu.</p>}<button className="mt-8" onClick={async () => { await caches.delete("gac-sach-content-v1"); setItems([]); }}>Xóa bản lưu offline</button></>}</section></main>;
+  return <main className="app-surface min-h-screen"><header className="site-header"><a className="wordmark" href="/library">Gác Sách</a><button onClick={() => { setActive(""); window.scrollTo(0,0); }}>Sách offline</button></header><section className="reader-column px-6 py-8" style={{ maxWidth: `${prefs.columnWidth}ch` }}><h1 className="book-title">{item?.bookTitle ?? "Chương đã lưu trên thiết bị"}</h1><p className="subtle mt-3">Lưu tự động các chương đã mở · tối đa 40 mục dữ liệu. Tiến độ đọc offline sẽ gửi khi có mạng. Giọng đọc cần kết nối API.</p>{!ready && <p role="status">Đang mở bộ nhớ offline…</p>}{error && <p role="alert">{error}</p>}{item ? <><h2 className="book-title mt-8">{item.chapter.title}</h2><div ref={text} className="reader-text whitespace-pre-line mt-8" style={{ fontSize: prefs.fontSize, lineHeight: prefs.lineHeight, fontFamily: readingFontFamily(prefs.font) }}><span data-start="0" data-end={item.chapter.plainText.length}>{item.chapter.plainText}</span></div><p className="mt-8"><a href={`/reader/${item.bookId}/${item.chapter.id}`}>Mở Reader khi có kết nối</a></p></> : <><ol className="chapter-list">{items.map((entry) => <li key={entry.chapter.id}><button onClick={() => { setActive(entry.chapter.id); window.scrollTo(0,0); }}>{entry.bookTitle} · {entry.chapter.title}</button></li>)}</ol>{ready && !items.length && <p className="mt-8">Chưa có chương offline. Mở một chương khi có mạng để lưu.</p>}<button className="mt-8" onClick={async () => { await caches.delete("gac-sach-content-v1"); setItems([]); }}>Xóa bản lưu offline</button></>}</section></main>;
 }

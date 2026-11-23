@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { isAmbientSound, type AmbientSound } from "./ambient-sounds";
+import { isReadingFont, type ReadingFont } from "./reading-fonts";
 
 export const readingThemes = [
   { id: "light", name: "Sáng", color: "#f5f7f3" },
@@ -57,7 +58,7 @@ export const followFxOptions = [
 export type FollowFx = typeof followFxOptions[number]["id"];
 
 export type ReadingPreferences = {
-  theme: ReadingTheme; font: "sans" | "serif"; fontSize: number; lineHeight: number;
+  theme: ReadingTheme; font: ReadingFont; fontSize: number; lineHeight: number;
   columnWidth: 60 | 68 | 75; leaves: boolean; moments: boolean; weather: boolean; scene: Scene; follow: Follow; followLead: number; followFx: FollowFx; sound: AmbientSound; ambientVolume: number;
 };
 export const preferenceKeys = ["theme", "font", "fontSize", "lineHeight", "columnWidth", "leaves", "moments", "weather", "scene", "follow", "followLead", "followFx", "sound", "ambientVolume"] as const;
@@ -71,7 +72,7 @@ export function validPreferences(saved: unknown): Partial<ReadingPreferences> {
   const value = saved as Record<string, unknown>;
   const result: Partial<ReadingPreferences> = {};
   if (readingThemes.some((theme) => theme.id === value.theme)) result.theme = value.theme as ReadingTheme;
-  if (value.font === "sans" || value.font === "serif") result.font = value.font;
+  if (isReadingFont(value.font)) result.font = value.font;
   if (typeof value.fontSize === "number" && Number.isInteger(value.fontSize) && value.fontSize >= 16 && value.fontSize <= 28) result.fontSize = value.fontSize;
   if (typeof value.lineHeight === "number" && value.lineHeight >= 1.5 && value.lineHeight <= 2.2 && Math.abs(value.lineHeight * 10 - Math.round(value.lineHeight * 10)) < 1e-8) result.lineHeight = value.lineHeight;
   if (value.columnWidth === 60 || value.columnWidth === 68 || value.columnWidth === 75) result.columnWidth = value.columnWidth;

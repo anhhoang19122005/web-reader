@@ -11,6 +11,9 @@ import { CultivationMoments } from "./CultivationMoments";
 import { momentKind } from "../lib/cultivation-moments";
 import { weatherMatches, type WeatherMatch } from "../lib/weather-words";
 import { TtsPlayer } from "./TtsPlayer";
+import { readingFonts, readingFontFamily, type ReadingFont } from "../lib/reading-fonts";
+import { useReadingFont } from "../lib/use-reading-font";
+import { matchingPreset, typographyPresets } from "../lib/reading-presets";
 import { defaultPreferences, readingThemes, useReadingPreferences, useReaderSession, type FollowFx } from "../lib/reading-preferences";
 import { characterRange, scrollToCharacter, visibleCharacter } from "../lib/reader-position";
 import { useTtsSession } from "../lib/tts-session";
@@ -113,6 +116,7 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
   const { focus } = useReaderSession();
   const preferences = useReadingPreferences();
   const { theme, font, fontSize, lineHeight, columnWidth, ready, syncStatus } = preferences;
+  useReadingFont(font);
   const queryClient = useQueryClient();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [bookmarkResume, setBookmarkResume] = useState<{ chapterId: string; position: number } | null>(null);
@@ -361,9 +365,11 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
   }
   const percent = chapterText?.length ? Math.min(100, Math.round(viewPosition / chapterText.length * 100)) : 0;
   const remainingMinutes = Math.ceil((chapterText?.slice(viewPosition).trim().split(/\s+/).filter(Boolean).length ?? 0) / 200);
+  const activePreset = matchingPreset({ font, fontSize, lineHeight, columnWidth });
   const settings = <div className="reader-settings">
     <span className="text-muted">Giao diện</span><div className="theme-options" role="group" aria-label="Theme giao diện">{readingThemes.map((option) => <button className="theme-option" aria-pressed={theme === option.id} key={option.id} onClick={() => useReadingPreferences.setState({ theme: option.id })}><span className="theme-swatch" aria-hidden="true" style={{ backgroundColor: option.color }} />{option.name}</button>)}</div>
-    <label>Font chữ <select aria-label="Font chữ" value={font} onChange={(e) => useReadingPreferences.setState({ font: e.target.value as "sans" | "serif" })}><option value="sans">Sans · Arial</option><option value="serif">Serif · Source Serif 4</option></select></label>
+    <span className="text-muted">Bộ cài đặt nhanh</span><div className="theme-options" role="group" aria-label="Bộ cài đặt nhanh">{typographyPresets.map((preset) => <button className="theme-option" title={preset.hint} aria-pressed={activePreset === preset.id} key={preset.id} onClick={() => useReadingPreferences.setState({ font: preset.font, fontSize: preset.fontSize, lineHeight: preset.lineHeight, columnWidth: preset.columnWidth })}>{preset.name}</button>)}</div>
+    <label>Font chữ <select aria-label="Font chữ" value={font} onChange={(e) => useReadingPreferences.setState({ font: e.target.value as ReadingFont })}>{readingFonts.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
     <label>Cỡ chữ <span className="size-stepper"><button aria-label="Giảm cỡ chữ" disabled={fontSize <= 16} onClick={() => useReadingPreferences.setState({ fontSize: fontSize - 1 })}><Icon name="minus" /></button><input aria-label="Cỡ chữ" type="range" min="16" max="28" step="1" value={fontSize} onChange={(e) => useReadingPreferences.setState({ fontSize: Number(e.target.value) })} /><button aria-label="Tăng cỡ chữ" disabled={fontSize >= 28} onClick={() => useReadingPreferences.setState({ fontSize: fontSize + 1 })}><Icon name="plus" /></button></span> {fontSize}px</label>
     <label>Giãn dòng <input aria-label="Giãn dòng" type="range" min="1.5" max="2.2" step="0.1" value={lineHeight} onChange={(e) => useReadingPreferences.setState({ lineHeight: Number(e.target.value) })} /> {lineHeight}</label>
     <label>Độ rộng dòng <select aria-label="Độ rộng dòng" value={columnWidth} onChange={(e) => useReadingPreferences.setState({ columnWidth: Number(e.target.value) as 60 | 68 | 75 })}>{[60,68,75].map((width) => <option key={width} value={width}>{width} ký tự</option>)}</select></label>
@@ -381,7 +387,7 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
   return <main className={`min-h-screen reading-surface reader-page ${focus ? "reader-focus" : ""}`}>
     <header className="site-header sticky top-0 z-20 reader-header"><Link className="wordmark" href={`/library/${bookId}`}>Gác Sách</Link><div className="flex items-center gap-3"><button onClick={(e) => openToc(e.currentTarget)}>Mục lục</button><button aria-label="Tùy chỉnh chữ và không gian" popoverTarget="reader-preferences">Aa</button><button onClick={toggleFocus}>Tập trung</button></div></header>
     <div className="chapter-progress" role="progressbar" aria-label="Tiến độ chương" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><span style={{ width: `${percent}%` }} /></div>
-    <article className="reader-column px-6 py-8 md:px-8" style={{ maxWidth: `calc(${columnWidth}ch + 4rem)`, fontSize, fontFamily: font === "serif" ? "var(--font-reader-serif), Georgia, serif" : "Arial, Helvetica, sans-serif" }}>
+    <article className="reader-column px-6 py-8 md:px-8" style={{ maxWidth: `calc(${columnWidth}ch + 4rem)`, fontSize, fontFamily: readingFontFamily(font) }}>
       <div className="reader-title"><p className="text-sm text-muted">{bookQuery.data.author}</p><h1 className={titleInText ? "sr-only" : "mt-2 text-3xl font-semibold md:text-4xl"}>{chapterQuery.data.title}</h1></div>
       <div ref={playerContainerRef} className="sticky top-16 z-10 mt-5 rounded-xl reader-dock reading-surface"><TtsPlayer onLayoutChange={() => { if (Date.now() > autoUntil.current) rememberView(); suppressSave(); }} key={`${chapterId}-${bookmarkResume?.chapterId === chapterId ? bookmarkResume.position : "default"}`} chapterId={chapterId} nextChapterId={nextChapter?.id} initialPosition={progressQuery.isLoading ? undefined : bookmarkResume?.chapterId === chapterId ? bookmarkResume.position : bookmarkTarget !== null && Number.isInteger(Number(bookmarkTarget)) && Number(bookmarkTarget) >= 0 ? Number(bookmarkTarget) : progressQuery.data?.chapterId === chapterId ? progressQuery.data.characterPosition : 0} onProgress={handleTtsProgress} onChunkChange={handleTtsChunk} onComplete={() => {
         if (!useTtsSession.getState().running) return;

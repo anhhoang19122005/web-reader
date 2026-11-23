@@ -83,6 +83,11 @@ func TestPreferencesMongoIntegration(t *testing.T) {
 	request(http.MethodPatch, `{"theme":"ocean"}`, 200)
 	request(http.MethodPatch, `{"sound":"stream"}`, 200)
 	request(http.MethodPatch, `{"fontSize":99}`, 400)
+	for _, font := range []string{"sans", "serif", "literata", "merriweather", "lora", "noto-serif", "crimson-pro", "be-vietnam-pro"} {
+		request(http.MethodPatch, `{"font":"`+font+`"}`, 200)
+	}
+	request(http.MethodPatch, `{"font":"comic-sans"}`, 400)
+	request(http.MethodPatch, `{"font":"serif"}`, 200)
 	result := request(http.MethodGet, "", 200)
 	if result.Preferences["font"] != "serif" || result.Preferences["theme"] != "ocean" || result.Preferences["fontSize"] != float64(24) || result.Preferences["sound"] != "stream" || result.UpdatedAt == nil {
 		t.Fatalf("partial patches lost fields: %+v", result)
