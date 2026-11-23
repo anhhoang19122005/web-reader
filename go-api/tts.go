@@ -414,7 +414,7 @@ func (a *App) generateTTSAudio(ctx context.Context, chapter chapterForTTS, chunk
 		return ttsResponse{}, owned
 	}
 	// Duration and marks were measured on the PCM; MP3 keeps them to within a frame.
-	audio, mimeType = compressAudio(audio, mimeType)
+	audio, mimeType = compressAudio(ctx, audio, mimeType)
 	audioID := uuid.New()
 	storageKey := "tts/" + audioID.String() + map[bool]string{true: ".wav", false: ".mp3"}[mimeType == "audio/wav"]
 	if err := a.store.Put(ctx, storageKey, audio, mimeType); err != nil {
