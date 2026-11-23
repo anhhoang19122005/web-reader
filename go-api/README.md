@@ -71,6 +71,8 @@ go run ./cmd/migrate
 
 Dữ liệu được lưu trong các collection `books`, `chapters`, `reading_progress`, `bookmarks` và `audio_chunks`. Chapter nằm riêng để không vượt giới hạn 16 MiB của một BSON document.
 
+Audio TTS chỉ là cache nên `cmd/local` tự dọn sau 1 phút khi khởi động rồi mỗi 6 giờ: bản ghi `audio_chunks` và file audio chưa phát lại quá `AUDIO_CACHE_MAX_AGE_DAYS` ngày (mặc định 30, `0` để tắt) bị xóa; lần nghe sau sẽ tạo lại. Mỗi lượt phát cập nhật `lastUsedAt` tối đa một lần mỗi giờ; bản ghi cũ chưa có trường này tính theo `createdAt`.
+
 ## Deploy Vercel
 
 ### Thiền Tâm Đức — VieNeu local

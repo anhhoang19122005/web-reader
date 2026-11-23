@@ -30,14 +30,16 @@ type Config struct {
 	MongoDatabase   string
 	StorageProvider string
 	StoragePath     string
-	SupabaseURL     string
-	SupabaseKey     string
-	SupabaseBucket  string
-	SaydiKeys       []string
-	SaydiVoiceID    string
-	SaydiVoiceName  string
-	AllowedOrigins  map[string]bool
-	EdgeEnabled     bool
+	// Cached audio unplayed for this many days is deleted; 0 keeps it forever.
+	AudioCacheMaxAgeDays int
+	SupabaseURL          string
+	SupabaseKey          string
+	SupabaseBucket       string
+	SaydiKeys            []string
+	SaydiVoiceID         string
+	SaydiVoiceName       string
+	AllowedOrigins       map[string]bool
+	EdgeEnabled          bool
 	// Piper TTS chạy trên Windows hoặc Docker Linux; Vercel Functions đặt false.
 	PiperEnabled        bool
 	PiperBin            string
@@ -88,21 +90,22 @@ func LoadConfig() Config {
 		saydiKeys = parseSaydiKeys(os.Getenv("SAYDI_API_KEY"))
 	}
 	return Config{
-		AccessToken:     os.Getenv("READER_ACCESS_TOKEN"),
-		VieNeuURL:       strings.TrimRight(os.Getenv("VIENEU_API_URL"), "/"),
-		VieNeuStreams:   envInt("VIENEU_MAX_STREAMS", 1),
-		MongoURI:        env("MONGODB_URI", "mongodb://localhost:27017"),
-		MongoDatabase:   env("MONGODB_DATABASE", "novel_reader"),
-		StorageProvider: env("STORAGE_PROVIDER", "local"),
-		StoragePath:     env("STORAGE_LOCAL_PATH", "../data"),
-		SupabaseURL:     strings.TrimRight(os.Getenv("SUPABASE_URL"), "/"),
-		SupabaseKey:     os.Getenv("SUPABASE_SERVICE_ROLE_KEY"),
-		SupabaseBucket:  env("SUPABASE_STORAGE_BUCKET", "reader"),
-		SaydiKeys:       saydiKeys,
-		SaydiVoiceID:    env("SAYDI_VOICE_ID", "vi-adam"),
-		SaydiVoiceName:  env("SAYDI_VOICE_NAME", "Adam · SaydiVoice"),
-		AllowedOrigins:  origins,
-		EdgeEnabled:     env("EDGE_TTS_ENABLED", "true") != "false",
+		AccessToken:          os.Getenv("READER_ACCESS_TOKEN"),
+		VieNeuURL:            strings.TrimRight(os.Getenv("VIENEU_API_URL"), "/"),
+		VieNeuStreams:        envInt("VIENEU_MAX_STREAMS", 1),
+		MongoURI:             env("MONGODB_URI", "mongodb://localhost:27017"),
+		MongoDatabase:        env("MONGODB_DATABASE", "novel_reader"),
+		StorageProvider:      env("STORAGE_PROVIDER", "local"),
+		StoragePath:          env("STORAGE_LOCAL_PATH", "../data"),
+		AudioCacheMaxAgeDays: max(envInt("AUDIO_CACHE_MAX_AGE_DAYS", 30), 0),
+		SupabaseURL:          strings.TrimRight(os.Getenv("SUPABASE_URL"), "/"),
+		SupabaseKey:          os.Getenv("SUPABASE_SERVICE_ROLE_KEY"),
+		SupabaseBucket:       env("SUPABASE_STORAGE_BUCKET", "reader"),
+		SaydiKeys:            saydiKeys,
+		SaydiVoiceID:         env("SAYDI_VOICE_ID", "vi-adam"),
+		SaydiVoiceName:       env("SAYDI_VOICE_NAME", "Adam · SaydiVoice"),
+		AllowedOrigins:       origins,
+		EdgeEnabled:          env("EDGE_TTS_ENABLED", "true") != "false",
 		// Local Piper: đường dẫn mặc định tương đối từ go-api/ tới repo-root/tools/piper.
 		PiperEnabled:        env("PIPER_ENABLED", "true") != "false",
 		PiperBin:            env("PIPER_BIN", "../tools/piper/piper.exe"),

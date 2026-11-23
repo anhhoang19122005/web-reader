@@ -82,6 +82,7 @@ type mongoAudioChunk struct {
 	DurationMS      int       `bson:"durationMs"`
 	Marks           []ttsMark `bson:"marks,omitempty"`
 	CreatedAt       time.Time `bson:"createdAt"`
+	LastUsedAt      time.Time `bson:"lastUsedAt,omitempty"`
 }
 
 func (a *App) collection(name string) *mongo.Collection {

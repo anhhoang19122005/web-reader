@@ -34,6 +34,21 @@ func main() {
 			done()
 		}
 	}()
+	go func() {
+		// Shortly after start (the API may have been off for days), then every 6 hours.
+		timer := time.NewTimer(time.Minute)
+		defer timer.Stop()
+		for range timer.C {
+			cleanup, done := context.WithTimeout(context.Background(), 5*time.Minute)
+			if removed, err := app.PurgeStaleAudio(cleanup); err != nil {
+				log.Printf("Purge stale audio: %v", err)
+			} else if removed > 0 {
+				log.Printf("Purge stale audio: removed %d cached chunks", removed)
+			}
+			done()
+			timer.Reset(6 * time.Hour)
+		}
+	}()
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8081"

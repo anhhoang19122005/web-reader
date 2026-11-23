@@ -379,6 +379,7 @@ func (a *App) generateTTSAudio(ctx context.Context, chapter chapterForTTS, chunk
 		if parseErr != nil {
 			return ttsResponse{}, databaseError(parseErr)
 		}
+		a.touchAudio(ctx, cached)
 		return ttsResponse{AudioURL: "/tts/audio/" + cachedID.String(), MimeType: cached.MimeType, DurationMS: cached.DurationMS, ChunkIndex: cached.ChunkIndex, StartCharacter: cached.StartCharacter, EndCharacter: cached.EndCharacter, Cached: true, Marks: cached.Marks}, nil
 	}
 	if err == nil {
@@ -412,16 +413,19 @@ func (a *App) generateTTSAudio(ctx context.Context, chapter chapterForTTS, chunk
 	if owned := a.ownedBook(ctx, chapter.BookID); owned != nil {
 		return ttsResponse{}, owned
 	}
+	// Duration and marks were measured on the PCM; MP3 keeps them to within a frame.
+	audio, mimeType = compressAudio(audio, mimeType)
 	audioID := uuid.New()
 	storageKey := "tts/" + audioID.String() + map[bool]string{true: ".wav", false: ".mp3"}[mimeType == "audio/wav"]
 	if err := a.store.Put(ctx, storageKey, audio, mimeType); err != nil {
 		return ttsResponse{}, newAPIError(http.StatusInternalServerError, "STORAGE_FAILED", "Không thể lưu audio.")
 	}
+	now := time.Now().UTC()
 	_, err = a.collection(audioCollection).InsertOne(ctx, mongoAudioChunk{
 		ID: audioID.String(), ChapterID: chapter.ID.String(), ChunkIndex: chunk.ChunkIndex, TextHash: textHash, Text: chunk.Text,
 		VoiceID: voice.ID, SpeakingRate: rate, Pitch: effectivePitch, Volume: effectiveVolume,
 		StartCharacter: chunk.StartCharacter, EndCharacter: chunk.EndCharacter, AudioStorageKey: storageKey,
-		MimeType: mimeType, DurationMS: durationMS, Marks: marks, CreatedAt: time.Now().UTC(),
+		MimeType: mimeType, DurationMS: durationMS, Marks: marks, CreatedAt: now, LastUsedAt: now,
 	})
 	if err != nil {
 		_ = a.store.Delete(ctx, storageKey)
@@ -466,6 +470,7 @@ func (a *App) ttsAudio(w http.ResponseWriter, r *http.Request, requestPath strin
 	} else if err != nil {
 		return databaseError(err)
 	}
+	a.touchAudio(r.Context(), audio)
 	return a.serveTTSAudio(w, r, audio)
 }
 
