@@ -22,10 +22,14 @@ export const readingThemes = [
   // Landscape themes: a photo under a scrim (see public/scenery/SOURCES.md); `color` is the swatch fallback.
   { id: "rungsuong", name: "Rừng sương", color: "#7fa77a" },
   { id: "hoguong", name: "Hồ gương", color: "#5a8fb5" },
+  { id: "bienbinhminh", name: "Biển bình minh", color: "#f0a050" },
+  { id: "cucquang", name: "Cực quang", color: "#46d28a" },
+  { id: "nganha", name: "Dải Ngân Hà", color: "#8a9bd6" },
+  { id: "tinhvan", name: "Tinh vân", color: "#e0875a" },
 ] as const;
 export type ReadingTheme = typeof readingThemes[number]["id"];
 
-const photoThemeIds: readonly string[] = ["rungsuong", "hoguong"];
+const photoThemeIds: readonly string[] = ["rungsuong", "hoguong", "bienbinhminh", "cucquang", "nganha", "tinhvan"];
 export const isPhotoTheme = (id: string) => photoThemeIds.includes(id);
 /** Swatch for the theme picker: the landscape's thumbnail for photo themes, a flat colour otherwise. */
 export function themeSwatchStyle(option: { id: string; color: string }) {

@@ -87,7 +87,7 @@ func TestPreferencesMongoIntegration(t *testing.T) {
 		request(http.MethodPatch, `{"font":"`+font+`"}`, 200)
 	}
 	request(http.MethodPatch, `{"font":"comic-sans"}`, 400)
-	for _, theme := range []string{"rungsuong", "hoguong"} {
+	for _, theme := range []string{"rungsuong", "hoguong", "bienbinhminh", "cucquang", "nganha", "tinhvan"} {
 		request(http.MethodPatch, `{"theme":"`+theme+`"}`, 200)
 	}
 	request(http.MethodPatch, `{"theme":"khongco"}`, 400)
