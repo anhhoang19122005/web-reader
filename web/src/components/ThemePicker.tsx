@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 import { usePathname } from "next/navigation";
-import { readingThemes, useReadingPreferences } from "../lib/reading-preferences";
+import { readingThemes, themeSwatchStyle, useReadingPreferences } from "../lib/reading-preferences";
 
 export function ThemePicker() {
   const id = useId();
@@ -22,7 +22,7 @@ export function ThemePicker() {
       </div>
       <div className="theme-options" role="group" aria-label="Theme giao diện">
         {readingThemes.map((option) => <button type="button" className="theme-option" aria-pressed={theme === option.id} key={option.id} onClick={() => useReadingPreferences.setState({ theme: option.id })}>
-          <span className="theme-swatch" aria-hidden="true" style={{ backgroundColor: option.color }} />{option.name}
+          <span className="theme-swatch" aria-hidden="true" style={themeSwatchStyle(option)} />{option.name}
         </button>)}
       </div>
     </div>

@@ -445,3 +445,25 @@ option,optgroup { color:var(--foreground); background:var(--surface); }
 @keyframes fx-rise { from { opacity:0; transform:translateY(.6em); } }
 @keyframes fx-wave { 0% { transform:translateY(0); } 30% { transform:translateY(-.4em); color:var(--accent); } 60% { transform:translateY(.1em); } 100% { transform:none; } }
 @media(prefers-reduced-motion:reduce) { .fx-fade,.fx-glow,.fx-ink,.fx-rise > i,.fx-wave > i { animation:none; } }
+
+/* Landscape themes (public/scenery, sources in SOURCES.md): a photo under a dark scrim, text on a translucent panel.
+   Legibility is designed in rather than hoped for. --scrim is sized per photo so that even its brightest area, under
+   the scrim, still gives --foreground at least 4.5:1 and --muted at least 4.5:1 (web/scenery-contrast.test.mjs enforces
+   it from the real image pixels); the reading column and cards then sit on --surface at 86%, so body text is far above that. */
+:root[data-theme="rungsuong"] { --background:#121a15; --surface:#18231c; --foreground:#f1f5ee; --muted:#d3dfd0; --line:#58705c; --accent:#c4e5a8; --accent-soft:#3d5e43; --leaf:#8fb27a; --photo:url("/scenery/rungsuong.webp"); --scrim:.66; }
+:root[data-theme="hoguong"] { --background:#0f1a24; --surface:#14212e; --foreground:#eff5fa; --muted:#cfdce8; --line:#4f6a82; --accent:#9fd0f2; --accent-soft:#2f4d66; --leaf:#7ea5bd; --photo:url("/scenery/hoguong.webp"); --scrim:.62; }
+:root:is([data-theme="rungsuong"],[data-theme="hoguong"]) { --aurora-a:#9a7bff; --aurora-b:#ff5c9a; --aurora-c:#22c3e6; --aurora-strength:30%; --depth-shadow:0 1px 2px rgb(0 0 0 / .3),0 10px 28px -6px rgb(0 0 0 / .5); --depth-shadow-hover:0 2px 4px rgb(0 0 0 / .35),0 24px 44px -12px rgb(0 0 0 / .65); color-scheme:dark; }
+:root:is([data-theme="rungsuong"],[data-theme="hoguong"]) .error-message { color:#ffb7ae; }
+:root:is([data-theme="rungsuong"],[data-theme="hoguong"]) body::before { content:""; position:fixed; inset:0; z-index:-1; background:linear-gradient(rgb(5 8 12 / var(--scrim)),rgb(5 8 12 / var(--scrim))),var(--photo) center / cover no-repeat; }
+:root:is([data-theme="rungsuong"],[data-theme="hoguong"]) :is(.reading-surface,.app-surface) { background:none; }
+:root:is([data-theme="rungsuong"],[data-theme="hoguong"]) .reader-column { margin:16px auto; background:color-mix(in srgb,var(--surface) 86%,transparent); backdrop-filter:blur(16px) saturate(1.15); border-radius:20px; box-shadow:var(--depth-shadow); }
+:root:is([data-theme="rungsuong"],[data-theme="hoguong"]) :is(.reader-title,.library-sort,.subtle) { text-shadow:0 1px 10px rgb(0 0 0 / .55); }
+@media(max-width:640px) { :root:is([data-theme="rungsuong"],[data-theme="hoguong"]) .reader-column { margin:8px; border-radius:14px; } }
+/* The photo covers the whole page, header included. The library header is plain text on the photo (the scrim already
+   guarantees its contrast). The reader header is sticky, so it is transparent at the top and turns into frosted glass
+   as the text scrolls under it; browsers without scroll-driven animations keep a light frosted header throughout. */
+:root:is([data-theme="rungsuong"],[data-theme="hoguong"]) .site-header { background:transparent; backdrop-filter:none; border-image:linear-gradient(transparent,transparent) 1; }
+:root:is([data-theme="rungsuong"],[data-theme="hoguong"]) .reader-header { background:color-mix(in srgb,var(--surface) 55%,transparent); backdrop-filter:blur(14px) saturate(1.2); }
+:root:is([data-theme="rungsuong"],[data-theme="hoguong"]) .mobile-reader-bar { background:color-mix(in srgb,var(--surface) 78%,transparent); backdrop-filter:blur(14px) saturate(1.2); }
+@keyframes photo-header-solidify { from { background-color:transparent; backdrop-filter:blur(0); } to { background-color:color-mix(in srgb,var(--surface) 80%,transparent); backdrop-filter:blur(14px) saturate(1.2); } }
+@supports (animation-timeline:scroll()) { :root:is([data-theme="rungsuong"],[data-theme="hoguong"]) .reader-header { background:transparent; backdrop-filter:none; animation:photo-header-solidify linear both; animation-timeline:scroll(root); animation-range:0 90px; } }

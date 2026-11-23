@@ -14,7 +14,7 @@ import { TtsPlayer } from "./TtsPlayer";
 import { readingFonts, readingFontFamily, type ReadingFont } from "../lib/reading-fonts";
 import { useReadingFont } from "../lib/use-reading-font";
 import { matchingPreset, typographyPresets } from "../lib/reading-presets";
-import { defaultPreferences, readingThemes, useReadingPreferences, useReaderSession, type FollowFx } from "../lib/reading-preferences";
+import { defaultPreferences, readingThemes, themeSwatchStyle, useReadingPreferences, useReaderSession, type FollowFx } from "../lib/reading-preferences";
 import { characterRange, scrollToCharacter, visibleCharacter } from "../lib/reader-position";
 import { useTtsSession } from "../lib/tts-session";
 import { audioPosition, revealStop } from "../lib/tts-progress";
@@ -367,7 +367,7 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
   const remainingMinutes = Math.ceil((chapterText?.slice(viewPosition).trim().split(/\s+/).filter(Boolean).length ?? 0) / 200);
   const activePreset = matchingPreset({ font, fontSize, lineHeight, columnWidth });
   const settings = <div className="reader-settings">
-    <span className="text-muted">Giao diện</span><div className="theme-options" role="group" aria-label="Theme giao diện">{readingThemes.map((option) => <button className="theme-option" aria-pressed={theme === option.id} key={option.id} onClick={() => useReadingPreferences.setState({ theme: option.id })}><span className="theme-swatch" aria-hidden="true" style={{ backgroundColor: option.color }} />{option.name}</button>)}</div>
+    <span className="text-muted">Giao diện</span><div className="theme-options" role="group" aria-label="Theme giao diện">{readingThemes.map((option) => <button className="theme-option" aria-pressed={theme === option.id} key={option.id} onClick={() => useReadingPreferences.setState({ theme: option.id })}><span className="theme-swatch" aria-hidden="true" style={themeSwatchStyle(option)} />{option.name}</button>)}</div>
     <span className="text-muted">Bộ cài đặt nhanh</span><div className="theme-options" role="group" aria-label="Bộ cài đặt nhanh">{typographyPresets.map((preset) => <button className="theme-option" title={preset.hint} aria-pressed={activePreset === preset.id} key={preset.id} onClick={() => useReadingPreferences.setState({ font: preset.font, fontSize: preset.fontSize, lineHeight: preset.lineHeight, columnWidth: preset.columnWidth })}>{preset.name}</button>)}</div>
     <label>Font chữ <select aria-label="Font chữ" value={font} onChange={(e) => useReadingPreferences.setState({ font: e.target.value as ReadingFont })}>{readingFonts.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
     <label>Cỡ chữ <span className="size-stepper"><button aria-label="Giảm cỡ chữ" disabled={fontSize <= 16} onClick={() => useReadingPreferences.setState({ fontSize: fontSize - 1 })}><Icon name="minus" /></button><input aria-label="Cỡ chữ" type="range" min="16" max="28" step="1" value={fontSize} onChange={(e) => useReadingPreferences.setState({ fontSize: Number(e.target.value) })} /><button aria-label="Tăng cỡ chữ" disabled={fontSize >= 28} onClick={() => useReadingPreferences.setState({ fontSize: fontSize + 1 })}><Icon name="plus" /></button></span> {fontSize}px</label>

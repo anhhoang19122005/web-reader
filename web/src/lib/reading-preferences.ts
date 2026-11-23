@@ -19,8 +19,20 @@ export const readingThemes = [
   { id: "cungky", name: "Cùng Kỳ", color: "#ffd34d" },
   { id: "daongot", name: "Đào Ngột", color: "#cdbb6e" },
   { id: "thaothiet", name: "Thao Thiết", color: "#43c6a0" },
+  // Landscape themes: a photo under a scrim (see public/scenery/SOURCES.md); `color` is the swatch fallback.
+  { id: "rungsuong", name: "Rừng sương", color: "#7fa77a" },
+  { id: "hoguong", name: "Hồ gương", color: "#5a8fb5" },
 ] as const;
 export type ReadingTheme = typeof readingThemes[number]["id"];
+
+const photoThemeIds: readonly string[] = ["rungsuong", "hoguong"];
+export const isPhotoTheme = (id: string) => photoThemeIds.includes(id);
+/** Swatch for the theme picker: the landscape's thumbnail for photo themes, a flat colour otherwise. */
+export function themeSwatchStyle(option: { id: string; color: string }) {
+  return isPhotoTheme(option.id)
+    ? { backgroundColor: option.color, backgroundImage: `url(/scenery/thumbs/${option.id}.webp)`, backgroundSize: "cover", backgroundPosition: "center" }
+    : { backgroundColor: option.color };
+}
 
 export const sceneOptions = [
   { id: "off", name: "Tắt", group: "" },

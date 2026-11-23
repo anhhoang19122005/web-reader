@@ -87,6 +87,11 @@ func TestPreferencesMongoIntegration(t *testing.T) {
 		request(http.MethodPatch, `{"font":"`+font+`"}`, 200)
 	}
 	request(http.MethodPatch, `{"font":"comic-sans"}`, 400)
+	for _, theme := range []string{"rungsuong", "hoguong"} {
+		request(http.MethodPatch, `{"theme":"`+theme+`"}`, 200)
+	}
+	request(http.MethodPatch, `{"theme":"khongco"}`, 400)
+	request(http.MethodPatch, `{"theme":"ocean"}`, 200)
 	request(http.MethodPatch, `{"font":"serif"}`, 200)
 	result := request(http.MethodGet, "", 200)
 	if result.Preferences["font"] != "serif" || result.Preferences["theme"] != "ocean" || result.Preferences["fontSize"] != float64(24) || result.Preferences["sound"] != "stream" || result.UpdatedAt == nil {
