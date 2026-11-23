@@ -11,6 +11,9 @@ import { audioPosition, resumePoint } from "../lib/tts-progress";
 const providerLabels: Record<string, string> = { edge: "Edge-TTS", saydi: "SaydiVoice", mock: "Demo", local: "Local · Offline", vieneu: "VieNeu · Local" };
 const ttsAudioCacheTime = 24 * 60 * 60 * 1000;
 type TtsPayload = Parameters<typeof generateTts>[0];
+
+// play() rejects with AbortError when pause() or a new src arrives before it settles.
+const isPlayInterrupted = (exception: unknown) => exception instanceof DOMException && exception.name === "AbortError";
 type BufferedAudio = { index: number; settings: string; url: string };
 type PendingAudio = { index: number; settings: string; controller: AbortController };
 
@@ -257,7 +260,7 @@ export function TtsPlayer({ chapterId, nextChapterId, initialPosition, onProgres
     if (!request) return;
     useTtsSession.setState({ running: true, voiceId: selectedVoice });
     if (loadedAudioKey.current === request.audioKey && audioRef.current?.src) {
-      try { await audioRef.current.play(); } catch (exception) { setError(exception instanceof Error ? exception.message : "Không thể phát audio."); }
+      try { await audioRef.current.play(); } catch (exception) { if (!isPlayInterrupted(exception)) setError(exception instanceof Error ? exception.message : "Không thể phát audio."); }
       return;
     }
     const version = ++playVersion.current;
@@ -288,7 +291,8 @@ export function TtsPlayer({ chapterId, nextChapterId, initialPosition, onProgres
       audio.playbackRate = playbackRate;
       await audio.play();
     } catch (exception) {
-      if (version === playVersion.current) {
+      // A pause() or a newer load while play() was pending is the user's own action, not a failure.
+      if (version === playVersion.current && !isPlayInterrupted(exception)) {
         useTtsSession.setState({ running: false, speechPlaying: false, autoplayChapterId: "" });
         setError(exception instanceof Error ? exception.message : "Không thể tạo audio.");
       }
@@ -322,7 +326,7 @@ export function TtsPlayer({ chapterId, nextChapterId, initialPosition, onProgres
 
   return <div className={`tts-player font-sans text-sm ${chunkIndex < 0 && !running ? "player-idle" : ""}`}>
     <div className="player-actions">
-      <button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={displayedIndex === 0} aria-label="Đoạn trước" onClick={playPrevious}><Icon name="left" /></button><button className="primary-button disabled:opacity-50" disabled={isGenerating} aria-label={isGenerating ? undefined : liveReading ? (speechPlaying ? "Tạm dừng" : "Tiếp tục") : "Đọc"} onClick={() => { if (liveReading) { const audio = audioRef.current; if (audio?.paused) void audio.play(); else audio?.pause(); } else void play(displayedIndex); }}>{isGenerating ? "Đang tạo…" : liveReading ? (speechPlaying ? <><Icon name="pause" /> Tạm dừng</> : <><Icon name="play" /> Tiếp tục</>) : <><Icon name="play" /> Đọc</>}</button><button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={displayedIndex >= chunks.data.length - 1} aria-label="Đoạn sau" onClick={() => playNext()}><Icon name="right" /></button>
+      <button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={displayedIndex === 0} aria-label="Đoạn trước" onClick={playPrevious}><Icon name="left" /></button><button className="primary-button disabled:opacity-50" disabled={isGenerating} aria-label={isGenerating ? undefined : liveReading ? (speechPlaying ? "Tạm dừng" : "Tiếp tục") : "Đọc"} onClick={() => { if (liveReading) { const audio = audioRef.current; if (audio?.paused) audio.play().catch((exception) => { if (!isPlayInterrupted(exception)) setError(exception instanceof Error ? exception.message : "Không thể phát audio."); }); else audio?.pause(); } else void play(displayedIndex); }}>{isGenerating ? "Đang tạo…" : liveReading ? (speechPlaying ? <><Icon name="pause" /> Tạm dừng</> : <><Icon name="play" /> Tiếp tục</>) : <><Icon name="play" /> Đọc</>}</button><button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={displayedIndex >= chunks.data.length - 1} aria-label="Đoạn sau" onClick={() => playNext()}><Icon name="right" /></button>
       <button className="rounded-full border border-current/20 px-3 py-2 disabled:opacity-50" disabled={!running} onClick={stop}><Icon name="stop" /> Dừng</button>
       <span className="voice-caption">{selectedVoiceInfo?.name}</span>
     </div>
