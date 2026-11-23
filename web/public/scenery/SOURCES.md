@@ -5,8 +5,8 @@ listed for traceability. NASA imagery is not copyrighted, but NASA's media guide
 NASA endorsement. Each file was cropped to 16:9, resized to 2560×1440 (or kept at the source size
 when that is smaller, never below 1920×1080) and re-encoded as WebP. `thumbs/` holds 64×64 swatches for the theme picker.
 
-Text legibility on top of these photos is enforced by `web/scenery-contrast.test.mjs`, which measures each image and
-checks the theme's text colours against its brightest area under the scrim set in `globals.css`.
+Nothing covers these photos (no scrim or panels); text stays readable through light colours with a dark halo, and
+`web/scenery.test.mjs` checks that every landscape theme keeps that halo and that each photo is at least Full HD.
 
 | File | Theme | Source | Author | Licence |
 |---|---|---|---|---|
