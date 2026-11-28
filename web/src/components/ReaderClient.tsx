@@ -294,7 +294,6 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
     const frame = requestAnimationFrame(restoreView);
     return () => cancelAnimationFrame(frame);
   }, [focus, restoreView]);
-  useEffect(() => () => { useReaderSession.setState({ focus: false }); }, []);
 
   useEffect(() => {
     if (!ttsChunk) return;
