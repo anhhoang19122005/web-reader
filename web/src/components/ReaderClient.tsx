@@ -165,22 +165,36 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
     anchor.current = { position, gap: rect ? Math.min(0, rect.top - inset()) : 0, atTop: window.scrollY <= 1 };
     if (!useTtsSession.getState().running) setViewPosition(position);
   }, [inset]);
+  // The visible reading band: below the sticky header/player, above the bottom controls.
+  const readingBand = useCallback(() => {
+    const controls = document.querySelector<HTMLElement>(focus ? ".focus-controls" : ".mobile-reader-bar");
+    const controlsRect = controls?.getBoundingClientRect();
+    return { top: inset(), bottom: controlsRect?.height && controlsRect.top > window.innerHeight / 2 ? controlsRect.top - 16 : window.innerHeight - 24 };
+  }, [focus, inset]);
+  const scrollReadingEdgeTo = useCallback((top: number, viewportTop: number) => {
+    suppressSave();
+    window.scrollTo({ top: Math.max(0, window.scrollY + top - viewportTop), behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+  }, [suppressSave]);
   const followPassage = useCallback(() => {
     const highlights = Array.from(textContainerRef.current?.querySelectorAll<HTMLElement>(".reading-highlight") ?? []);
     const rects = highlights.flatMap((node) => Array.from(node.getClientRects())).filter((rect) => rect.height > 0);
     if (!rects.length) return;
     const top = Math.min(...rects.map((rect) => rect.top));
     const bottom = Math.max(...rects.map((rect) => rect.bottom));
-    const viewportTop = inset();
-    const controls = document.querySelector<HTMLElement>(focus ? ".focus-controls" : ".mobile-reader-bar");
-    const controlsRect = controls?.getBoundingClientRect();
-    const viewportBottom = controlsRect?.height && controlsRect.top > window.innerHeight / 2 ? controlsRect.top - 16 : window.innerHeight - 24;
+    const band = readingBand();
     // Oversized passages start at the reading edge; fitting passages stay fully visible.
-    if (top < viewportTop || bottom > viewportBottom) {
-      suppressSave();
-      window.scrollTo({ top: Math.max(0, window.scrollY + top - viewportTop), behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
-    }
-  }, [focus, inset, suppressSave]);
+    if (top < band.top || bottom > band.bottom) scrollReadingEdgeTo(top, band.top);
+  }, [readingBand, scrollReadingEdgeTo]);
+  // Inside a passage taller than the screen, keep the word being read on screen: once it drops
+  // below the reading band, turn the page so its line sits at the top of the band.
+  const followWord = useCallback((position: number) => {
+    const container = textContainerRef.current;
+    if (!container || snoozed.current || position <= 0) return;
+    const rect = characterRange(container, position - 1)?.getBoundingClientRect();
+    if (!rect?.height) return;
+    const band = readingBand();
+    if (rect.bottom > band.bottom || rect.top < band.top) scrollReadingEdgeTo(rect.top, band.top);
+  }, [readingBand, scrollReadingEdgeTo]);
   const restoreView = useCallback(() => {
     if (!textContainerRef.current) return;
     if (!snoozed.current && textContainerRef.current.querySelector(".reading-highlight")) { followPassage(); return; }
@@ -306,6 +320,11 @@ export function ReaderClient({ bookId, chapterId }: { bookId: string; chapterId:
     const frame = requestAnimationFrame(followPassage);
     return () => cancelAnimationFrame(frame);
   }, [ttsChunk, followPassage]);
+  useEffect(() => {
+    if (!ttsChunk || reveal.end <= ttsChunk.startCharacter || reveal.end >= ttsChunk.endCharacter) return;
+    const frame = requestAnimationFrame(() => followWord(reveal.end));
+    return () => cancelAnimationFrame(frame);
+  }, [ttsChunk, reveal.end, followWord]);
 
   useEffect(() => {
     if (!chapterText || !nextChapter || (viewPosition / chapterText.length < .7 && (ttsChunk?.endCharacter ?? 0) < chapterText.length)) return;
